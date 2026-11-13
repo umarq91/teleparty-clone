@@ -1,6 +1,7 @@
 /** Typed runtime messages between popup / content script / background. */
 export type RuntimeMessage =
   | { type: 'OPEN_SITE'; site: 'netflix' | 'youtube' }
+  | { type: 'OPEN_TITLE'; titleId: string }
   | { type: 'SET_BADGE'; text: string; color?: string }
   | { type: 'SEARCH_STICKERS'; query: string; kind: 'stickers' | 'gifs' };
 

@@ -4,6 +4,12 @@ export function getTitleId(loc: Pick<Location, 'pathname'> = location): string |
   return loc.pathname.match(/^\/watch\/(\d{1,20})/)?.[1] ?? null;
 }
 
+/** Best-effort title of what is playing (Netflix shows it in the player's title element while controls are up). */
+export function getTitleName(root: ParentNode = document): string | null {
+  const t = root.querySelector('[data-uia="video-title"]')?.textContent?.replace(/\s+/g, ' ').trim();
+  return t || null;
+}
+
 export const watchUrl = (titleId: string) => `https://www.netflix.com/watch/${encodeURIComponent(titleId)}`;
 
 /**

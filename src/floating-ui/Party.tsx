@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Coffee, Hourglass, Loader2, Megaphone, MessageCircle, Play, SquareCheckBig, Volume2, X } from 'lucide-react';
+import { Coffee, Hourglass, Loader2, Megaphone, MessageCircle, Play, SquareCheckBig, Tv, Volume2, X } from 'lucide-react';
 import type { PartyControl } from '@/content/PartyControl';
 import type { PartyState } from '@/shared/types';
 import { SPRING } from '@/shared/ui/kit';
@@ -98,7 +98,7 @@ function describe(p: PartyState, peer: string, party: PartyControl, now: number)
 }
 
 /** Top-centre status toast + the big centre-screen 3-2-1. Both sit above the movie and never block it. */
-export function PartyLayer({ party: p, control, peerName, notice, onDismissNotice }: { party: PartyState; control: PartyControl; peerName: string; notice: string | null; onDismissNotice: () => void }) {
+export function PartyLayer({ party: p, control, peerName, notice, onDismissNotice, watch, onJump, onDismissWatch }: { party: PartyState; control: PartyControl; peerName: string; notice: string | null; onDismissNotice: () => void; watch: { name: string; title: string | null } | null; onJump: () => void; onDismissWatch: () => void }) {
   const ticking = p.hold !== 'none' || p.countdownTo !== null;
   const now = useNow(ticking, 200);
   const toast = describe(p, peerName, control, now);
@@ -138,6 +138,24 @@ export function PartyLayer({ party: p, control, peerName, notice, onDismissNotic
                 {toast.sub && <div className="text-[13px] leading-[18px] text-soft">{toast.sub}</div>}
               </div>
               {toast.actions && <div className="flex items-center gap-1.5">{toast.actions}</div>}
+            </motion.div>
+          )}
+          {watch && p.hold === 'none' && (
+            <motion.div
+              key="watch" role="status"
+              initial={{ opacity: 0, y: -16, scale: 0.94 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -10, scale: 0.96 }} transition={SPRING}
+              className="mtp-root surface-float pointer-events-auto flex max-w-[min(520px,94vw)] flex-wrap items-center gap-3 rounded-[18px] py-3 pl-3 pr-3.5"
+              onKeyDown={(e) => e.stopPropagation()}
+            >
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-lemon text-grape-950"><Tv size={18} /></span>
+              <div className="min-w-0 flex-1">
+                <div className="text-[15px] font-bold leading-5 text-white">{watch.name} is watching</div>
+                <div className="max-w-[320px] truncate text-[13px] leading-[18px] text-soft">{watch.title ?? 'a video'}</div>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <ToastButton onClick={onDismissWatch}>Not now</ToastButton>
+                <ToastButton primary onClick={onJump}>Jump there</ToastButton>
+              </div>
             </motion.div>
           )}
           {!toast && notice && p.hold === 'none' && (

@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { HEARTBEAT_MS, PING_MS, STUN_SERVERS } from '@/shared/constants';
+import { HEARTBEAT_MS, PENDING_JUMP_KEY, PING_MS, STUN_SERVERS } from '@/shared/constants';
 import { log } from '@/shared/logger';
 import { PROTOCOL_VERSION, cleanChatText, isSoundId, type PeerMessage, type SoundId, type PresencePayload, type SignalEnvelope, type SyncMessage } from '@/shared/protocol';
 import { initialStatus, type ConnectionPhase, type RoomSession, type RoomStatus, type Settings } from '@/shared/types';
@@ -49,6 +49,8 @@ export class RoomClient extends Emitter<Events> {
   private chatTimes: number[] = [];
   private lastSoundAt = 0;
   private lastSoundSent = 0;
+  private myTitle: string | null = null;
+  private autoSyncing = false;
   private sb!: SupabaseClient;
   private me = '';
   private channel: RoomChannel | null = null;
@@ -110,7 +112,7 @@ export class RoomClient extends Emitter<Events> {
     this.patch({ roomId: this.session.roomId, role: this.session.role, selfName: this.session.displayName, phase: 'connecting', hostingTab: true, siteName: this.adapter.name });
 
     // Player side runs regardless of the network so the user sees "player detected" early.
-    this.sync.on('status', ({ sync, driftMs }) => this.patch({ sync, driftMs }));
+    this.sync.on('status', ({ sync, driftMs }) => { this.patch({ sync, driftMs }); void this.maybeAutoSync(); });
     this.sync.on('notice', (n) => this.emit('notice', n));
     this.sync.on('follow', (follow) => this.patch({ follow }));
     this.sync.on('heldPlayAttempt', () => {
@@ -121,6 +123,7 @@ export class RoomClient extends Emitter<Events> {
         : `${name} paused for a break. Use "Resume" when you're both back.`);
     });
     this.party.on('state', (party) => this.patch({ party }));
+    this.watcher.on('title', (t) => { this.myTitle = t; void this.channel?.updatePresence({ title: t ?? undefined }); });
     this.watcher.on('buffer', (b) => this.party.setLocalBuffering(b.on, b.why ?? null));
     this.watcher.on('player', ({ status, video, titleId }) => {
       this.sync.setPlayer(status, video, titleId);
@@ -152,6 +155,7 @@ export class RoomClient extends Emitter<Events> {
     const presence: PresencePayload = {
       name: this.session.displayName, role: this.session.role, gen: this.gen,
       playerStatus: this.status.player, titleId: this.status.titleId, inCall: this.media.isActive,
+      ...(this.myTitle ? { title: this.myTitle } : {}),
     };
     this.channel = new RoomChannel(this.sb, this.session.roomId, this.me, presence);
     this.channel.on('status', ({ status, error }) => { this.chanStatus = status; this.chanError = error; this.recompute(); });
@@ -426,11 +430,36 @@ export class RoomClient extends Emitter<Events> {
   followPeer() { this.sync.startFollowing(); }
   stopFollowingPeer() { this.sync.stopFollowing(); }
 
-  /** Jump to whatever the friend is watching (a plain navigation, same as clicking a link; works across sites). */
-  followPeerTitle() {
+  /**
+   * "Jump there": open whatever the friend is watching (works across sites). We leave a note so the page we land on
+   * lines our position up with theirs once the player has settled (see maybeAutoSync).
+   */
+  jumpToPeer() {
     const id = this.peer?.titleId;
     const url = id ? urlForTitle(id) : null;
-    if (url) location.assign(url);
+    if (!id || !url) return;
+    const go = () => location.assign(url);
+    chrome.storage.local.set({ [PENDING_JUMP_KEY]: { titleId: id, at: Date.now() } }).then(go, go);
+  }
+
+  /** After a "Jump there", mirror the friend for a few seconds so we land on their exact spot, then let go. */
+  private async maybeAutoSync() {
+    const id = this.status.titleId;
+    const peer = this.peer;
+    if (this.autoSyncing || this.stopped || !id || !peer || peer.titleId !== id || peer.playerStatus !== 'ready' || this.status.player !== 'ready') return;
+    this.autoSyncing = true;
+    const key = PENDING_JUMP_KEY;
+    const r = await chrome.storage.local.get(key).catch(() => ({}));
+    const pending = (r as Record<string, { titleId?: string; at?: number } | undefined>)[key];
+    if (!pending || pending.titleId !== id || Date.now() - (pending.at ?? 0) > 120_000) { this.autoSyncing = false; return; }
+    await chrome.storage.local.remove(key).catch(() => undefined);
+    // Netflix's player aborts if it is seeked while still loading: give it a few seconds first.
+    setTimeout(() => {
+      if (this.stopped || this.status.titleId !== id || this.peer?.titleId !== id) { this.autoSyncing = false; return; }
+      this.sync.startFollowing();
+      this.emit('notice', `Syncing to ${peer.name}…`);
+      setTimeout(() => { this.sync.stopFollowing(); this.autoSyncing = false; this.emit('notice', `In sync with ${peer.name}.`); }, 4500);
+    }, 5000);
   }
 
   // ---- status -----------------------------------------------------------------------------
@@ -455,7 +484,7 @@ export class RoomClient extends Emitter<Events> {
     this.patch({
       phase,
       error: this.status.phase === 'error' ? this.status.error : this.chanError,
-      peer: this.peer && { userId: this.peer.userId, name: this.peer.name, playerStatus: this.peer.playerStatus, titleId: this.peer.titleId, inCall: this.peer.inCall },
+      peer: this.peer && { userId: this.peer.userId, name: this.peer.name, playerStatus: this.peer.playerStatus, titleId: this.peer.titleId, title: this.peer.title ?? null, inCall: this.peer.inCall },
       transport: !link ? 'none' : link.dataChannelOpen && !this.relayedSync ? 'datachannel' : this.relayedSync ? 'relay-fallback' : 'none',
     });
   }

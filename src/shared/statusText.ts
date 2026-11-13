@@ -65,3 +65,11 @@ export function videoLabel(s: RoomStatus): (Label & { fix: boolean }) | null {
   if (!c.camOn && !c.remoteCamOn) return { text: 'Cameras off', tone: 'idle', fix: false };
   return { text: `${c.remoteCamOn ? 'You see them ✓' : 'Their camera is off'}${c.camOn ? ' · They see you ✓' : ''}`, tone: 'ok', fix: false };
 }
+
+/** "Sam is watching X": the friend has a video open that we do not (we browse, or watch something else). */
+export function watchInvite(s: RoomStatus): { titleId: string; name: string; title: string | null } | null {
+  const p = s.peer;
+  if (!p || !p.titleId || p.playerStatus !== 'ready') return null;
+  if (s.titleId === p.titleId) return null;
+  return { titleId: p.titleId, name: p.name, title: p.title };
+}

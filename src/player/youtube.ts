@@ -9,6 +9,12 @@ export function getVideoId(loc: Pick<Location, 'pathname' | 'search'> = location
 
 export const isWatchPage = (loc: Pick<Location, 'pathname' | 'search'> = location) => getVideoId(loc) !== null;
 
+/** The tab title is "(3) Video title - YouTube"; strip the notification count and the suffix. */
+export function getTitleName(title: string = document.title): string | null {
+  const t = title.replace(/^\(\d+\)\s*/, '').replace(/\s*-\s*YouTube$/, '').trim();
+  return t && t !== 'YouTube' ? t : null;
+}
+
 export const watchUrl = (videoId: string) => `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`;
 
 /** The main player's <video> (hover previews and the miniplayer use other elements). */

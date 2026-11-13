@@ -126,20 +126,20 @@ export function Collapse({ open, children }: { open: boolean; children: ReactNod
 }
 
 /** Titled, collapsible section. */
-export function Section({ title, icon, defaultOpen = true, badge, children }: { title: string; icon?: ReactNode; defaultOpen?: boolean; badge?: ReactNode; children: ReactNode }) {
+export function Section({ title, icon, defaultOpen = true, badge, compact, children }: { title: string; icon?: ReactNode; defaultOpen?: boolean; badge?: ReactNode; compact?: boolean; children: ReactNode }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <section className="surface rounded-2xl">
+    <section className={`surface ${compact ? 'rounded-xl' : 'rounded-2xl'}`}>
       <button
         type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} onMouseDown={(e) => e.preventDefault()}
-        className="focus-candy flex min-h-[48px] w-full items-center gap-2.5 rounded-2xl px-3.5 py-2 text-left"
+        className={`focus-candy flex w-full items-center gap-2 text-left ${compact ? 'min-h-[40px] rounded-xl px-3 py-1' : 'min-h-[48px] rounded-2xl px-3.5 py-2'}`}
       >
         {icon && <span className="shrink-0">{icon}</span>}
-        <span className="flex-1 text-[14px] font-bold text-white">{title}</span>
+        <span className={`flex-1 font-bold text-white ${compact ? 'text-[13px]' : 'text-[14px]'}`}>{title}</span>
         {badge}
         <motion.span animate={{ rotate: open ? 180 : 0 }} transition={SPRING} className="text-soft"><ChevronDown size={18} /></motion.span>
       </button>
-      <Collapse open={open}><div className="space-y-3.5 px-3.5 pb-3.5">{children}</div></Collapse>
+      <Collapse open={open}><div className={compact ? 'space-y-2 px-3 pb-3' : 'space-y-3.5 px-3.5 pb-3.5'}>{children}</div></Collapse>
     </section>
   );
 }

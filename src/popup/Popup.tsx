@@ -4,7 +4,7 @@ import { Check, Copy, ExternalLink, LogOut, Plus, Settings as Cog } from 'lucide
 import { buildInviteLink, parseInvite } from '@/shared/invite';
 import { sendRuntime } from '@/shared/messaging';
 import { NETFLIX_ORIGIN, YOUTUBE_ORIGIN } from '@/shared/constants';
-import { callLabel, connectionLabel, playerLabel, syncLabel } from '@/shared/statusText';
+import { callLabel, connectionLabel, playerLabel, syncLabel, watchInvite } from '@/shared/statusText';
 import { StatusDot } from '@/shared/ui/StatusDot';
 import { createRoom, joinRoom, leaveRoom } from '@/rooms/roomApi';
 import { errorMessage } from '@/shared/util';
@@ -145,6 +145,14 @@ function RoomView({ session, status }: { session: RoomSession; status: RoomStatu
           </div>
         )}
       </div>
+
+      {live && watchInvite(live) && (
+        <div className="space-y-2 rounded-2xl border border-[#8c7a1f] bg-[#2f2a0f] p-4">
+          <div className="text-[13px] font-bold text-lemon">{live.peer?.name} is watching</div>
+          <div className="truncate text-[15px] font-bold text-white">{live.peer?.title ?? 'a video'}</div>
+          <Button variant="primary" className="w-full" onClick={() => void sendRuntime({ type: 'OPEN_TITLE', titleId: live.peer!.titleId! })}><ExternalLink size={15} /> Jump there</Button>
+        </div>
+      )}
 
       <div className="surface space-y-3 rounded-2xl p-4">
         <div className="text-[15px] font-bold">Invite your friend</div>

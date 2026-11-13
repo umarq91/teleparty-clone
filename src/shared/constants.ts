@@ -3,6 +3,8 @@ import type { Settings } from './types';
 export const NETFLIX_ORIGIN = 'https://www.netflix.com';
 export const YOUTUBE_ORIGIN = 'https://www.youtube.com';
 export const HOST_LEASE_KEY = 'hostLease';
+/** Set right before jumping to the friend's video; the next page syncs position once the player has settled. */
+export const PENDING_JUMP_KEY = 'pendingJump';
 export const INVITE_HASH_KEY = 'mtp';
 export const STORAGE_SESSION_KEY = 'roomSession';
 export const STORAGE_SETTINGS_KEY = 'settings';

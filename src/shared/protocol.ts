@@ -50,6 +50,10 @@ export function cleanChatText(s: string): string {
   return s.replace(/[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, MAX_CHAT);
 }
 
+/** A video's display title is peer-controlled text: same clean-up as chat, shorter cap. */
+export const MAX_TITLE = 80;
+export const cleanTitle = (s: string): string => cleanChatText(s).slice(0, MAX_TITLE);
+
 export interface ChatMessage { kind: 'chat'; v: number; id: string; text: string }
 export interface SoundMessage { kind: 'sound'; v: number; id: SoundId }
 
@@ -214,6 +218,8 @@ export interface PresencePayload {
   gen: string;
   playerStatus: 'none' | 'not-found' | 'ready';
   titleId: string | null;
+  /** Display name of what they are watching (best effort), so the friend can be offered "Jump there". */
+  title?: string;
   inCall: boolean;
 }
 
@@ -226,5 +232,6 @@ export function validatePresence(x: unknown): PresencePayload | null {
   if (playerStatus !== 'none' && playerStatus !== 'not-found' && playerStatus !== 'ready') return null;
   if (titleId !== null && !isTitleId(titleId)) return null;
   if (typeof inCall !== 'boolean') return null;
-  return { name, role, gen, playerStatus, titleId: titleId as string | null, inCall };
+  const t = isStr(x.title, 400) ? cleanTitle(x.title) : '';
+  return { name, role, gen, playerStatus, titleId: titleId as string | null, inCall, ...(t ? { title: t } : {}) };
 }

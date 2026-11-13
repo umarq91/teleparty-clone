@@ -48,6 +48,8 @@ export interface PeerInfo {
   name: string;
   playerStatus: PlayerStatus;
   titleId: string | null;
+  /** What they are watching, as text (best effort). */
+  title: string | null;
   inCall: boolean;
 }
 

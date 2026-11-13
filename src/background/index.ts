@@ -1,7 +1,9 @@
 import { DEFAULT_SETTINGS, NETFLIX_ORIGIN, STORAGE_SETTINGS_KEY, YOUTUBE_ORIGIN } from '@/shared/constants';
 import { isRuntimeMessage, type StickerResult, type StickerSearchResponse } from '@/shared/messaging';
 import { getSettings } from '@/shared/storage';
-import { isAllowedGifUrl } from '@/shared/protocol';
+import { isAllowedGifUrl, isTitleId } from '@/shared/protocol';
+import { PENDING_JUMP_KEY } from '@/shared/constants';
+import { urlForTitle } from '@/player/sites';
 
 /**
  * The service worker is deliberately thin: WebRTC and Realtime need a long-lived DOM context, which
@@ -45,6 +47,24 @@ chrome.runtime.onMessage.addListener((msg: unknown, _sender, sendResponse) => {
       void chrome.action.setBadgeText({ text: msg.text });
       if (msg.color) void chrome.action.setBadgeBackgroundColor({ color: msg.color });
       return false;
+    }
+    case 'OPEN_TITLE': {
+      // "Jump there" from the popup: open the friend's video on the right site, reusing a tab of that site if there is one.
+      void (async () => {
+        const url = isTitleId(msg.titleId) ? urlForTitle(msg.titleId) : null;
+        if (!url) return sendResponse({ ok: false });
+        await chrome.storage.local.set({ [PENDING_JUMP_KEY]: { titleId: msg.titleId, at: Date.now() } });
+        const tabs = await chrome.tabs.query({ url: `${new URL(url).origin}/*` });
+        const tab = tabs.find((t) => t.active) ?? tabs[0];
+        if (tab?.id !== undefined) {
+          await chrome.tabs.update(tab.id, { url, active: true });
+          if (tab.windowId !== undefined) await chrome.windows.update(tab.windowId, { focused: true });
+        } else {
+          await chrome.tabs.create({ url });
+        }
+        sendResponse({ ok: true });
+      })();
+      return true;
     }
     case 'SEARCH_STICKERS': {
       void searchStickers(msg.query, msg.kind).then(sendResponse);

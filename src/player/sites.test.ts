@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { getVideoId, isAdPlaying, isWatchPage } from './youtube';
+import { getTitleName, getVideoId, isAdPlaying, isWatchPage } from './youtube';
 import { adapterForHost, NETFLIX, urlForTitle, YOUTUBE } from './sites';
 
 describe('youtube helpers', () => {
@@ -15,6 +15,14 @@ describe('youtube helpers', () => {
     expect(isAdPlaying()).toBe(false);
     document.getElementById('movie_player')!.classList.add('ad-showing');
     expect(isAdPlaying()).toBe(true);
+  });
+});
+
+describe('youtube title', () => {
+  it('strips the notification count and the site suffix', () => {
+    expect(getTitleName('(3) Never Gonna Give You Up - YouTube')).toBe('Never Gonna Give You Up');
+    expect(getTitleName('YouTube')).toBeNull();
+    expect(getTitleName('')).toBeNull();
   });
 });
 

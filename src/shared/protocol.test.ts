@@ -122,3 +122,13 @@ describe('title ids and ad reasons', () => {
     expect(validatePeerMessage({ kind: 'party', v: 1, op: 'buffering', why: 'because' })).toBeNull();
   });
 });
+
+describe('presence title', () => {
+  const base = { name: 'Sam', role: 'guest', gen: 'g', playerStatus: 'ready', titleId: '80100172', inCall: false };
+  it('keeps a cleaned, capped title and drops junk', () => {
+    expect(validatePresence({ ...base, title: '  The   Bear \u202e S2:E6 ' })).toMatchObject({ title: 'The Bear S2:E6' });
+    expect(validatePresence({ ...base, title: 'x'.repeat(300) })!.title).toHaveLength(80);
+    expect(validatePresence({ ...base, title: 12345 })).not.toHaveProperty('title');
+    expect(validatePresence({ ...base })).not.toHaveProperty('title');
+  });
+});

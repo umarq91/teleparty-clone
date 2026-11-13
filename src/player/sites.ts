@@ -14,6 +14,8 @@ export interface SiteAdapter {
   /** Namespaced id of what is playing here (Netflix: digits; YouTube: `yt:<id>`), or null. */
   titleId(): string | null;
   findVideo(): HTMLVideoElement | null;
+  /** Best-effort text title of what is playing. */
+  titleName(): string | null;
   /** Is an advert currently playing in the player? (Content must not be synced while it is.) */
   isAdPlaying(): boolean;
   /** Does this site own that title id? */
@@ -30,6 +32,7 @@ export const NETFLIX: SiteAdapter = {
   isWatchPage: () => netflix.isWatchPage(),
   titleId: () => netflix.getTitleId(),
   findVideo: () => netflix.findPlayerVideo(),
+  titleName: () => netflix.getTitleName(),
   isAdPlaying: () => false,
   owns: (id) => /^\d{1,20}$/.test(id),
   urlFor: (id) => netflix.watchUrl(id),
@@ -41,6 +44,7 @@ export const YOUTUBE: SiteAdapter = {
   isWatchPage: () => youtube.isWatchPage(),
   titleId: () => { const v = youtube.getVideoId(); return v ? YT_PREFIX + v : null; },
   findVideo: () => youtube.findPlayerVideo(),
+  titleName: () => youtube.getTitleName(),
   isAdPlaying: () => youtube.isAdPlaying(),
   owns: (id) => id.startsWith(YT_PREFIX),
   urlFor: (id) => youtube.watchUrl(id.slice(YT_PREFIX.length)),

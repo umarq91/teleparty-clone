@@ -11,6 +11,8 @@ type Events = {
   event: { type: VideoEventType; video: HTMLVideoElement };
   /** The player ran out of data (true) / has been comfortably playable again for a moment (false). */
   buffer: { on: boolean; why?: 'ad' };
+  /** The playing video's title text changed (best effort; titles load a moment after the player). */
+  title: string | null;
 };
 
 const BUFFER_AFTER_MS = 800;   // ignore the tiny stalls every seek causes
@@ -42,6 +44,7 @@ export class VideoWatcher extends Emitter<Events> {
   private bufStart = 0;
   private bufStableSince = 0;
   private adOn = false;
+  private titleName: string | null = null;
   private adStart = 0;
   private adClearSince = 0;
   private adTimer: ReturnType<typeof setInterval> | null = null;
@@ -75,6 +78,8 @@ export class VideoWatcher extends Emitter<Events> {
     if (found !== this.video) this.attach(found);
 
     const status: PlayerStatus = this.video && onWatch ? 'ready' : onWatch && Date.now() - this.watchSince > NOT_FOUND_AFTER_MS ? 'not-found' : 'none';
+    const name = onWatch && this.video ? this.adapter.titleName() : null;
+    if (name !== this.titleName) { this.titleName = name; this.emit('title', name); }
     if (status !== this.status || titleId !== this.titleId) {
       this.status = status;
       this.titleId = titleId;

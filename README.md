@@ -10,6 +10,7 @@ All configuration (Supabase, TURN, GIPHY) lives in `.env` at build time, never i
 
 ## Features
 - **Synced playback** on Netflix and YouTube with drift correction, plus a private peer-to-peer video call. You can even be on different sites: "Go there" takes you to what your friend is watching.
+- **"Sam is watching…" → Jump there.** If your friend has a video open and you don't (you're browsing, or on something else), you get an offer with the video's title: in the panel, as a toast when it's minimised, and in the popup. One tap opens the same video (even on the other site) and lines your position up with theirs.
 - **YouTube ads:** when one of you gets an ad, the other pauses ("Sam is watching an ad") and you restart together after it.
 - **Buffering sync:** if either video stalls, both pause and show who is catching up, then restart together.
 - **Ready check, brb pause and a shared 3-2-1:** everyone resumes at the same instant, even with mismatched clocks.
