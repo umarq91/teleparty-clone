@@ -1,0 +1,9 @@
+# Used only if you run Supabase locally with the CLI (`supabase start`).
+# For a hosted project, apply supabase/migrations/*.sql in the SQL editor instead.
+project_id = "mini-teleparty"
+
+[auth]
+enable_anonymous_sign_ins = true
+
+[realtime]
+enabled = true
