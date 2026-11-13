@@ -35,7 +35,33 @@ export interface MediaStateMessage { kind: 'media'; v: number; micOn: boolean; c
 export interface FixMediaMessage { kind: 'fix'; v: number }
 /** A sticker/emoji/GIF reaction. Exactly one of `emoji` or `gif` is set. */
 export interface ReactMessage { kind: 'react'; v: number; emoji?: string; gif?: string; label?: string }
-export type PeerMessage = SyncMessage | PingMessage | PongMessage | MediaStateMessage | FixMediaMessage | ReactMessage;
+
+export const SOUND_IDS = ['applause', 'gasp', 'rimshot', 'airhorn', 'boing', 'trombone', 'dundun', 'raspberry'] as const;
+export type SoundId = (typeof SOUND_IDS)[number];
+export const isSoundId = (x: unknown): x is SoundId => typeof x === 'string' && (SOUND_IDS as readonly string[]).includes(x);
+
+export const MAX_CHAT = 200;
+/** Chat text is peer-controlled: drop control + bidi-override characters, collapse whitespace, cap length. */
+export function cleanChatText(s: string): string {
+  return s.replace(/[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, MAX_CHAT);
+}
+
+export interface ChatMessage { kind: 'chat'; v: number; id: string; text: string }
+export interface SoundMessage { kind: 'sound'; v: number; id: SoundId }
+
+/**
+ * Shared "watch together" coordination (see content/PartyControl.ts).
+ *  brb / ready-ask : the sender paused and is holding both sides.
+ *  ready-yes       : answer to ready-ask.
+ *  buffering / buffered : the sender's player ran out of data / has recovered.
+ *  go              : resume together at `goAt` (sender's clock, ms), from video position `pos`.
+ *  cancel          : abort a ready check or countdown; stay paused.
+ */
+export const PARTY_OPS = ['brb', 'ready-ask', 'ready-yes', 'buffering', 'buffered', 'go', 'cancel'] as const;
+export type PartyOp = (typeof PARTY_OPS)[number];
+export interface PartyMessage { kind: 'party'; v: number; op: PartyOp; goAt?: number; pos?: number; secs?: number }
+
+export type PeerMessage = SyncMessage | PingMessage | PongMessage | MediaStateMessage | FixMediaMessage | ReactMessage | ChatMessage | SoundMessage | PartyMessage;
 
 /** Only GIPHY's CDN is accepted for remote GIFs: a peer must not be able to make us load arbitrary URLs. */
 export const GIF_URL_RE = /^https:\/\/(?:media\d{0,2}|i)\.giphy\.com\/[\w\-./]{1,200}$/;
@@ -108,6 +134,22 @@ export function validatePeerMessage(x: unknown): PeerMessage | null {
         ...(typeof x.rxAudio === 'boolean' ? { rxAudio: x.rxAudio } : {}),
       };
     case 'fix': return { kind: 'fix', v: PROTOCOL_VERSION };
+    case 'chat': {
+      if (!isStr(x.id, 24) || !/^[\w-]{1,24}$/.test(x.id) || !isStr(x.text, 1000)) return null;
+      const text = cleanChatText(x.text);
+      return text ? { kind: 'chat', v: PROTOCOL_VERSION, id: x.id, text } : null;
+    }
+    case 'sound': return isSoundId(x.id) ? { kind: 'sound', v: PROTOCOL_VERSION, id: x.id } : null;
+    case 'party': {
+      if (!isStr(x.op, 16) || !(PARTY_OPS as readonly string[]).includes(x.op)) return null;
+      const op = x.op as PartyOp;
+      const out: PartyMessage = { kind: 'party', v: PROTOCOL_VERSION, op };
+      if (x.goAt !== undefined) { if (!isNum(x.goAt, 0, Number.MAX_SAFE_INTEGER)) return null; out.goAt = x.goAt; }
+      if (x.pos !== undefined) { if (!isNum(x.pos, 0, MAX_POSITION_SEC)) return null; out.pos = x.pos; }
+      if (x.secs !== undefined) { if (!isNum(x.secs, 0, 10)) return null; out.secs = x.secs; }
+      if (op === 'go' && out.goAt === undefined) return null;
+      return out;
+    }
     case 'react': {
       const label = isStr(x.label, 40) ? x.label : undefined;
       if (x.gif !== undefined) return isAllowedGifUrl(x.gif) ? { kind: 'react', v: PROTOCOL_VERSION, gif: x.gif, ...(label ? { label } : {}) } : null;

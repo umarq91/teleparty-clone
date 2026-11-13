@@ -30,5 +30,6 @@ export const DEFAULT_SETTINGS: Settings = {
   useNetflixSeekBridge: true,
   autoStartCall: false,
   autoCollapse: true,
+  waitForBuffering: true,
   giphyApiKey: (env?.VITE_GIPHY_API_KEY as string | undefined) ?? '',
 };

@@ -8,6 +8,13 @@ reads the `<video>` element's play/pause/time state and calls the standard `play
 
 All configuration (Supabase, TURN, GIPHY) lives in `.env` at build time, never inside the app. See **[setup.md](setup.md)**.
 
+## Features
+- **Synced playback** with drift correction, plus a private peer-to-peer video call.
+- **Buffering sync:** if either video stalls, both pause and show who is catching up, then restart together.
+- **Ready check, brb pause and a shared 3-2-1:** everyone resumes at the same instant, even with mismatched clocks.
+- **Chat bubbles** that float over the movie and fade; **soundboard** (synthesized, no files); **emoji, stickers and GIFs** (GIPHY).
+- Collapsible panel: full, videos-only, or a pill.
+
 ## Use
 
 1. Popup → **Create room** → copy the invite link → send it. 2. Friend opens the link (or pastes it in their popup) and confirms **Join**.

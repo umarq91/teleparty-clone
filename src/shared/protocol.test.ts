@@ -85,3 +85,25 @@ describe('react messages', () => {
     expect(validatePeerMessage({ kind: 'react', v: 1 })).toBeNull();
   });
 });
+
+describe('chat / sound / party messages', () => {
+  it('cleans chat text and rejects junk', () => {
+    expect(validatePeerMessage({ kind: 'chat', v: 1, id: 'abc123', text: '  hi\u0000   there‮ ' })).toMatchObject({ text: 'hi there' });
+    expect(validatePeerMessage({ kind: 'chat', v: 1, id: 'abc123', text: 'x'.repeat(500) })).toMatchObject({ text: 'x'.repeat(200) });
+    expect(validatePeerMessage({ kind: 'chat', v: 1, id: 'abc123', text: '   ' })).toBeNull();
+    expect(validatePeerMessage({ kind: 'chat', v: 1, id: '../x', text: 'hi' })).toBeNull();
+    expect(validatePeerMessage({ kind: 'chat', v: 1, id: 'a', text: 'x'.repeat(2000) })).toBeNull();
+  });
+  it('only knows built-in sounds', () => {
+    expect(validatePeerMessage({ kind: 'sound', v: 1, id: 'airhorn' })).not.toBeNull();
+    expect(validatePeerMessage({ kind: 'sound', v: 1, id: 'https://evil/x.mp3' })).toBeNull();
+  });
+  it('validates party ops', () => {
+    expect(validatePeerMessage({ kind: 'party', v: 1, op: 'brb' })).not.toBeNull();
+    expect(validatePeerMessage({ kind: 'party', v: 1, op: 'go', goAt: Date.now() + 3000, pos: 12.5 })).not.toBeNull();
+    expect(validatePeerMessage({ kind: 'party', v: 1, op: 'go' })).toBeNull(); // go needs a time
+    expect(validatePeerMessage({ kind: 'party', v: 1, op: 'explode' })).toBeNull();
+    expect(validatePeerMessage({ kind: 'party', v: 1, op: 'go', goAt: NaN })).toBeNull();
+    expect(validatePeerMessage({ kind: 'party', v: 1, op: 'go', goAt: 5, pos: -1 })).toBeNull();
+  });
+});

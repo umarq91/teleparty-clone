@@ -1,0 +1,11 @@
+import './chrome-mock';
+import { createRoot } from 'react-dom/client';
+import '../src/popup/popup.css';
+import { Popup } from '../src/popup/Popup';
+import { initialStatus } from '../src/shared/types';
+void initialStatus;
+const q = new URLSearchParams(location.search);
+const chromeStore = (globalThis as unknown as { chrome: { storage: { local: { set(o: object): Promise<void> } } } }).chrome.storage.local;
+if (q.get('room')) void chromeStore.set({ roomSession: { roomId: 'r1', secret: 's'.repeat(22), role: 'host', displayName: 'Umar', joinedAt: 1 } });
+if (q.get('name')) void chromeStore.set({ settings: { displayName: q.get('name') } });
+createRoot(document.getElementById('root')!).render(<Popup />);

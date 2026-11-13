@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { HEARTBEAT_MS, PING_MS, STUN_SERVERS } from '@/shared/constants';
 import { log } from '@/shared/logger';
-import { PROTOCOL_VERSION, type PeerMessage, type PresencePayload, type SignalEnvelope, type SyncMessage } from '@/shared/protocol';
+import { PROTOCOL_VERSION, cleanChatText, isSoundId, type PeerMessage, type SoundId, type PresencePayload, type SignalEnvelope, type SyncMessage } from '@/shared/protocol';
 import { initialStatus, type ConnectionPhase, type RoomSession, type RoomStatus, type Settings } from '@/shared/types';
 import { Emitter, errorMessage, randomId } from '@/shared/util';
 import { ensureAuth, getSupabase } from '@/rooms/supabaseClient';
@@ -13,6 +13,7 @@ import { SyncEngine } from '@/player/SyncEngine';
 import { VideoWatcher } from '@/player/VideoWatcher';
 import { seekVideo } from '@/player/seek';
 import { watchUrl } from '@/player/netflix';
+import { PartyControl } from './PartyControl';
 
 type Events = {
   status: RoomStatus;
@@ -22,9 +23,13 @@ type Events = {
   evicted: string;
   /** A sticker/emoji/GIF from the friend. */
   reaction: { from: string; emoji?: string; gif?: string; label?: string };
+  chat: { id: string; from: string; text: string; mine: boolean };
+  sound: { id: SoundId; from: string; mine: boolean };
 };
 
 const RTT_WINDOW = 8;
+const CHAT_BURST = 6, CHAT_WINDOW_MS = 8000; // inbound flood limit
+const SOUND_MIN_GAP_MS = 700;
 
 function iceServers(s: Settings): RTCIceServer[] {
   const servers = [...STUN_SERVERS];
@@ -40,6 +45,10 @@ function iceServers(s: Settings): RTCIceServer[] {
  */
 export class RoomClient extends Emitter<Events> {
   readonly media = new LocalMedia();
+  readonly party: PartyControl;
+  private chatTimes: number[] = [];
+  private lastSoundAt = 0;
+  private lastSoundSent = 0;
   private sb!: SupabaseClient;
   private me = '';
   private channel: RoomChannel | null = null;
@@ -76,6 +85,17 @@ export class RoomClient extends Emitter<Events> {
       }),
       seek: (v, sec, bridge) => seekVideo(v as HTMLVideoElement, sec, bridge),
     });
+    this.party = new PartyControl({
+      send: (m) => this.sendPeer(m),
+      clockOffset: () => this.clockOffset,
+      isHost: () => this.session.role === 'host',
+      hold: () => this.sync.hold(),
+      release: (o) => { void this.sync.release(o); },
+      position: () => this.watcher.current?.currentTime ?? null,
+      bufferHoldEnabled: () => this.settings.waitForBuffering,
+      peerName: () => this.peer?.name ?? 'Your friend',
+      notify: (m) => this.emit('notice', m),
+    });
   }
 
   get snapshot(): RoomStatus { return this.status; }
@@ -92,6 +112,15 @@ export class RoomClient extends Emitter<Events> {
     this.sync.on('status', ({ sync, driftMs }) => this.patch({ sync, driftMs }));
     this.sync.on('notice', (n) => this.emit('notice', n));
     this.sync.on('follow', (follow) => this.patch({ follow }));
+    this.sync.on('heldPlayAttempt', () => {
+      const name = this.peer?.name ?? 'your friend';
+      const h = this.party.state.hold;
+      this.emit('notice', h === 'buffering' ? `Waiting for ${name}'s video to catch up. We'll restart together.`
+        : h === 'ready-check' ? `Waiting for the ready check. ${name} hasn't said ready yet.`
+        : `${name} paused for a break. Use "Resume" when you're both back.`);
+    });
+    this.party.on('state', (party) => this.patch({ party }));
+    this.watcher.on('buffer', (b) => this.party.setLocalBuffering(b));
     this.watcher.on('player', ({ status, video, titleId }) => {
       this.sync.setPlayer(status, video, titleId);
       this.patch({ player: status, titleId });
@@ -161,6 +190,7 @@ export class RoomClient extends Emitter<Events> {
     if (this.pingTimer) clearInterval(this.pingTimer);
     if (this.helloTimer) clearTimeout(this.helloTimer);
     this.unsubMedia?.();
+    this.party.destroy();
     this.watcher.stop();
     this.sync.stop();
     this.media.stop();
@@ -183,6 +213,7 @@ export class RoomClient extends Emitter<Events> {
       this.dropLink();
       this.sync.setPeerPlayer('none', null);
       this.sync.peerGone();
+      this.party.peerGone();
       return this.recompute();
     }
     this.sync.setPeerPlayer(p.playerStatus, p.titleId);
@@ -216,6 +247,7 @@ export class RoomClient extends Emitter<Events> {
         this.sendPeer(this.pingNow());
         this.sync.announcePlayer();
         this.sendMediaState();
+        this.party.resend();
       }
       this.recompute();
     });
@@ -263,6 +295,22 @@ export class RoomClient extends Emitter<Events> {
       case 'pong': this.onPong(m.t0, m.t1); break;
       case 'media': this.patchCall({ remoteMicOn: m.micOn, remoteCamOn: m.camOn, peerRxVideo: m.rxVideo ?? null, peerRxAudio: m.rxAudio ?? null }); break;
       case 'fix': void this.fixMedia(false); break;
+      case 'party': this.party.handle(m); break;
+      case 'chat': {
+        const now = Date.now();
+        this.chatTimes = this.chatTimes.filter((t) => now - t < CHAT_WINDOW_MS);
+        if (this.chatTimes.length >= CHAT_BURST) break; // a flooding peer is simply ignored
+        this.chatTimes.push(now);
+        this.emit('chat', { id: m.id, from: this.peer?.name ?? 'Friend', text: m.text, mine: false });
+        break;
+      }
+      case 'sound': {
+        const now = Date.now();
+        if (now - this.lastSoundAt < SOUND_MIN_GAP_MS) break;
+        this.lastSoundAt = now;
+        this.emit('sound', { id: m.id, from: this.peer?.name ?? 'Friend', mine: false });
+        break;
+      }
       case 'react': this.emit('reaction', { from: this.peer?.name ?? 'Friend', emoji: m.emoji, gif: m.gif, label: m.label }); break;
     }
   }
@@ -325,6 +373,26 @@ export class RoomClient extends Emitter<Events> {
 
   /** Show a one-off message in the overlay. */
   notify(msg: string) { this.emit('notice', msg); }
+
+  /** Send a short chat line. Returns false (and sends nothing) if the friend isn't reachable. */
+  sendChat(raw: string): boolean {
+    const text = cleanChatText(raw);
+    if (!text) return false;
+    const id = randomId(4);
+    if (!this.sendPeer({ kind: 'chat', v: PROTOCOL_VERSION, id, text })) return false;
+    this.emit('chat', { id, from: 'You', text, mine: true });
+    return true;
+  }
+
+  /** Play a built-in sound on both sides. */
+  sendSound(id: SoundId): boolean {
+    const now = Date.now();
+    if (!isSoundId(id) || now - this.lastSoundSent < SOUND_MIN_GAP_MS) return false;
+    if (!this.sendPeer({ kind: 'sound', v: PROTOCOL_VERSION, id })) return false;
+    this.lastSoundSent = now;
+    this.emit('sound', { id, from: 'You', mine: true });
+    return true;
+  }
 
   /** Fire a sticker at the friend. Returns false when the peer link is down (nothing is queued). */
   sendReaction(r: { emoji?: string; gif?: string; label?: string }): boolean {

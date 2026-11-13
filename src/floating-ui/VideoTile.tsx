@@ -44,7 +44,8 @@ export function VideoTile({ stream, label, muted, mirror, hasVideo, micOn, class
   const grad = tint === 'gum' ? 'from-gum to-coral' : 'from-sky to-mint';
   return (
     // Gradient "frame" made from padding, with the video clipped inside.
-    <div className={`relative rounded-[18px] bg-gradient-to-br ${grad} p-[2px] shadow-[0_8px_24px_-6px_rgb(0_0_0/.6)] ${className}`}>
+    // No `relative` here: callers position the tile (e.g. `absolute` for the picture-in-picture), and the inner box anchors the label.
+    <div className={`rounded-[18px] bg-gradient-to-br ${grad} p-[2px] shadow-[0_8px_24px_-6px_rgb(0_0_0/.6)] ${className}`}>
       <div className="relative h-full w-full overflow-hidden rounded-[16px] bg-grape-900">
         <video
           ref={ref}
@@ -61,10 +62,10 @@ export function VideoTile({ stream, label, muted, mirror, hasVideo, micOn, class
             {!compact && <CameraOff size={12} className="text-white/60" />}
           </div>
         )}
-        <div className={`glass-chip absolute flex items-center gap-1 rounded-full text-white ${compact ? 'bottom-1 left-1 px-1.5 py-px text-[9px]' : 'bottom-2 left-2 px-2 py-0.5 text-[11px]'} font-bold`}>
+        {!(compact && micOn && label === 'You') && <div className={`glass-chip absolute flex items-center gap-1 rounded-full text-white ${compact ? 'bottom-1 left-1 px-1.5 py-px text-[9px]' : 'bottom-2 left-2 px-2 py-0.5 text-[11px]'} font-bold`}>
           {!micOn && <MicOff size={compact ? 8 : 10} className="text-gum" />}
           <span className={`${compact ? 'max-w-[60px]' : 'max-w-[110px]'} truncate`}>{label}</span>
-        </div>
+        </div>}
       </div>
     </div>
   );

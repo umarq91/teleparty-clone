@@ -34,6 +34,7 @@ export function SettingsView({ settings, onSave, onBack }: Props) {
 
       <Section title="Vibes" icon={<Sparkles size={15} className="text-lemon" />} defaultOpen>
         <Checkbox checked={draft.autoCollapse} onChange={(v) => set('autoCollapse', v)} label="Tuck away everything but the videos once the call is solid" />
+        <Checkbox checked={draft.waitForBuffering} onChange={(v) => set('waitForBuffering', v)} label="Pause for both of us when either video is buffering" />
         <Checkbox checked={draft.autoStartCall} onChange={(v) => set('autoStartCall', v)} label="Start the call automatically when we connect" />
       </Section>
 

@@ -22,6 +22,8 @@ export interface Settings {
   /** Opt-in: seek through Netflix's own (undocumented) player API instead of video.currentTime. */
   useNetflixSeekBridge: boolean;
   autoStartCall: boolean;
+  /** Pause both sides while either one is buffering, and resume together. */
+  waitForBuffering: boolean;
   /** Fold the panel down to just the videos once the call is healthy. */
   autoCollapse: boolean;
   /** Free GIPHY API key for GIF/sticker search (optional). */
@@ -70,9 +72,30 @@ export interface RoomStatus {
   /** 'following': I mirror my friend. 'followed': my friend mirrors me. */
   follow: 'none' | 'following' | 'followed';
   call: CallStatus;
+  /** Shared pauses / ready checks / countdowns. */
+  party: PartyState;
   hostingTab: boolean;
   updatedAt: number;
 }
+
+export type HoldKind = 'none' | 'brb' | 'buffering' | 'ready-check';
+export interface PartyState {
+  hold: HoldKind;
+  /** brb: who stepped away · buffering: whose video is loading · ready-check: who asked. */
+  by: 'me' | 'peer' | 'both' | null;
+  meReady: boolean;
+  peerReady: boolean;
+  /** Epoch ms (local clock) when the hold began, for a "away for 2:13" timer. */
+  since: number;
+  /** Epoch ms (local clock) at which playback resumes, while a countdown runs. */
+  countdownTo: number | null;
+  /** Short countdown for buffering recovery (a toast, not the big 3-2-1). */
+  countdownQuick: boolean;
+  /** Epoch ms of the last resume, so the UI can flash "GO!". */
+  goAt: number;
+}
+
+export const initialParty = (): PartyState => ({ hold: 'none', by: null, meReady: false, peerReady: false, since: 0, countdownTo: null, countdownQuick: false, goAt: 0 });
 
 export interface CallStatus {
   active: boolean;
@@ -110,6 +133,7 @@ export const initialStatus = (): RoomStatus => ({
     active: false, micOn: false, camOn: false, remoteMicOn: false, remoteCamOn: false,
     quality: 'unknown', iceState: 'new', rxVideo: null, rxAudio: null, txVideo: null, peerRxVideo: null, peerRxAudio: null, error: null,
   },
+  party: initialParty(),
   hostingTab: false,
   updatedAt: Date.now(),
 });

@@ -1,15 +1,17 @@
 import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
 import { useEffect, useRef, useState } from 'react';
 import {
-  Activity, Check, Clapperboard, LogOut, Link2, Maximize2, Mic, MicOff, Minus, Phone, PhoneOff, RefreshCw,
-  Smile, Video, VideoOff, X, Maximize, Shrink,
+  Activity, Check, Clapperboard, Coffee, LogOut, Link2, Maximize2, Mic, MicOff, Minus, Phone, PhoneOff, RefreshCw,
+  Smile, SquareCheckBig, Video, VideoOff, X, Maximize, Shrink, MessageCircle, Volume2,
 } from 'lucide-react';
 import type { RoomClient } from '@/content/RoomClient';
 import { callLabel, connectionLabel, playerLabel, syncLabel, videoLabel } from '@/shared/statusText';
 import { StatusDot } from '@/shared/ui/StatusDot';
 import { Section, SPRING } from '@/shared/ui/kit';
-import { useDrag, useLiveSettings, useNotice, usePanelMode, useReactions, useRemoteStream, useRoomStatus, type CinemaSize } from './hooks';
-import { ReactionLayer, StickerTray } from './Reactions';
+import { useChat, useDrag, useLiveSettings, useNotice, usePanelMode, useReactions, useRemoteStream, useRoomStatus, useSoundsMuted, type CinemaSize } from './hooks';
+import { ChatLayer, PartyLayer } from './Party';
+import { ReactionLayer } from './Reactions';
+import { Tray, type TrayTab } from './Tray';
 import { VideoTile } from './VideoTile';
 
 interface Props {
@@ -58,7 +60,12 @@ export function App({ client, inviteLink, onLeave }: Props) {
   const { mode, size, setMode, setSize } = usePanelMode();
   const [copied, setCopied] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
-  const [trayOpen, setTrayOpen] = useState(false);
+  const [tray, setTray] = useState<TrayTab | null>(null);
+  const lastTab = useRef<TrayTab>('chat');
+  const trayOpen = tray !== null;
+  const openTray = (t?: TrayTab) => setTray((cur) => { const next = t ?? lastTab.current; if (cur === next && t === undefined) return null; lastTab.current = next; return next; });
+  const chat = useChat(client);
+  const [soundsMuted, setSoundsMuted] = useSoundsMuted(client);
   const winRef = useRef<HTMLDivElement>(null);
   const { pos, onPointerDown } = useDrag(() => ({ x: Math.max(8, window.innerWidth - 372), y: 72 }));
   const reactions = useReactions(client);
@@ -91,6 +98,7 @@ export function App({ client, inviteLink, onLeave }: Props) {
     setCopied(true); setTimeout(() => setCopied(false), 1800);
   };
 
+  const connected = !!status.peer && status.transport === 'datachannel';
   const sendSticker = (r: { emoji?: string; gif?: string; label?: string }) => {
     const ok = client.sendReaction(r);
     if (ok) reactions.add({ from: 'You', emoji: r.emoji, gif: r.gif, mine: true });
@@ -113,7 +121,7 @@ export function App({ client, inviteLink, onLeave }: Props) {
   );
 
   const stickerButton = (small?: boolean) => (
-    <IconButton small={small} onClick={() => setTrayOpen((o) => !o)} active={!trayOpen} title="Stickers & GIFs"><Smile size={small ? 14 : 17} /></IconButton>
+    <IconButton small={small} onClick={() => openTray()} active={!trayOpen} title="Chat, stickers, sounds & party"><Smile size={small ? 14 : 17} /></IconButton>
   );
 
   const videos = (compact: boolean) => (
@@ -131,6 +139,8 @@ export function App({ client, inviteLink, onLeave }: Props) {
   return (
     <>
       <ReactionLayer items={reactions.items} />
+      <ChatLayer items={chat.live} />
+      <PartyLayer party={status.party} control={client.party} peerName={peerName} notice={shown === 'full' ? null : notice} onDismissNotice={dismissNotice} />
       <div
         ref={winRef}
         className="mtp-root pointer-events-auto fixed select-none"
@@ -235,6 +245,22 @@ export function App({ client, inviteLink, onLeave }: Props) {
                     </div>
                   </div>
 
+                  {/* Party shortcuts */}
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {([
+                      ['Ready?', 'Ready check: pause both, then count 3-2-1', <SquareCheckBig size={15} key="r" />, () => client.party.requestReadyCheck(), !connected || status.party.hold !== 'none'],
+                      ['Brb', 'Pause both while you step away', <Coffee size={15} key="b" />, () => client.party.requestBrb(), !connected || status.party.hold !== 'none'],
+                      ['Chat', 'Message your friend', <MessageCircle size={15} key="c" />, () => openTray('chat'), false],
+                      ['Sounds', 'Soundboard', <Volume2 size={15} key="s" />, () => openTray('sounds'), false],
+                    ] as const).map(([label, title, icon, run, off]) => (
+                      <motion.button
+                        key={label} type="button" disabled={off} title={title} onMouseDown={(e) => e.preventDefault()} onClick={run}
+                        whileHover={off ? undefined : { y: -2 }} whileTap={off ? undefined : { scale: 0.93 }} transition={SPRING}
+                        className="focus-candy glass-chip flex h-[52px] flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] font-bold text-white/90 disabled:cursor-not-allowed disabled:opacity-40"
+                      >{icon}{label}</motion.button>
+                    ))}
+                  </div>
+
                   {!c.active && status.peer?.inCall && (
                     <TextButton tone="lemon" onClick={startCall}><span>{peerName} is in the call 👀</span><span>Join →</span></TextButton>
                   )}
@@ -292,9 +318,17 @@ export function App({ client, inviteLink, onLeave }: Props) {
 
         {/* Sticker tray floats beside whichever layout is showing */}
         <AnimatePresence>
-          {trayOpen && (
+          {tray && (
             <div className={`absolute left-0 ${trayAbove ? 'bottom-full mb-2' : 'top-full mt-2'}`} style={{ maxWidth: '100vw' }}>
-              <StickerTray hasKey={!!settings.giphyApiKey} onClose={() => setTrayOpen(false)} onSend={sendSticker} />
+              <Tray
+                tab={tray} onTab={(t) => { lastTab.current = t; setTray(t); }} onClose={() => setTray(null)}
+                connected={connected} peerName={peerName} hasGiphyKey={!!settings.giphyApiKey}
+                chat={chat.log} party={status.party} muted={soundsMuted} onMuted={setSoundsMuted}
+                onReaction={sendSticker}
+                onChat={(t) => { const ok = client.sendChat(t); if (!ok) client.notify('Couldn’t send. Are you connected to your friend?'); return ok; }}
+                onSound={(id) => { if (!client.sendSound(id)) client.notify('Can’t play sounds until you’re connected to your friend.'); }}
+                onReady={() => client.party.requestReadyCheck()} onBrb={() => client.party.requestBrb()}
+              />
             </div>
           )}
         </AnimatePresence>

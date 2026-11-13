@@ -3,6 +3,7 @@ import type { RoomClient } from '@/content/RoomClient';
 import type { RoomStatus, Settings } from '@/shared/types';
 import { DEFAULT_SETTINGS } from '@/shared/constants';
 import { getSettings, onSettingsChange } from '@/shared/storage';
+import { playSound, SOUNDS } from './sounds';
 
 export function useRoomStatus(client: RoomClient): RoomStatus {
   return useSyncExternalStore(
@@ -123,4 +124,53 @@ export function useReactions(client: RoomClient) {
   };
   useEffect(() => client.on('reaction', (r) => add({ from: r.from, emoji: r.emoji, gif: r.gif, mine: false })), [client]); // eslint-disable-line react-hooks/exhaustive-deps
   return { items, add };
+}
+
+// ---- chat bubbles + soundboard ----------------------------------------------------------------
+
+export interface ChatItem { key: number; from: string; text: string; mine: boolean; kind: 'chat' | 'sound' }
+const BUBBLE_MS = 8000;
+let chatKey = 1;
+
+/** `log` = scroll-back for the tray; `live` = the few bubbles currently floating over the movie. */
+export function useChat(client: RoomClient) {
+  const [log, setLog] = useState<ChatItem[]>([]);
+  const [live, setLive] = useState<ChatItem[]>([]);
+  useEffect(() => {
+    const push = (it: Omit<ChatItem, 'key'>) => {
+      const item = { ...it, key: chatKey++ };
+      setLog((l) => [...l.slice(-59), item]);
+      setLive((l) => [...l.slice(-3), item]);
+      setTimeout(() => setLive((l) => l.filter((x) => x.key !== item.key)), BUBBLE_MS);
+    };
+    const offChat = client.on('chat', (m) => push({ from: m.from, text: m.text, mine: m.mine, kind: 'chat' }));
+    const offSound = client.on('sound', (m) => push({ from: m.from, text: `played ${SOUNDS.find((s) => s.id === m.id)?.label ?? m.id}`, mine: m.mine, kind: 'sound' }));
+    return () => { offChat(); offSound(); };
+  }, [client]);
+  return { log, live };
+}
+
+const MUTE_KEY = 'overlaySoundsMuted';
+/** Mute switch for the soundboard, remembered across pages. */
+export function useSoundsMuted(client: RoomClient): [boolean, (m: boolean) => void] {
+  const [muted, setMuted] = useState(false);
+  const ref = useRef(false);
+  ref.current = muted;
+  useEffect(() => {
+    chrome.storage.local.get(MUTE_KEY).then((r) => setMuted(r[MUTE_KEY] === true)).catch(() => undefined);
+  }, []);
+  useEffect(() => client.on('sound', (m) => { if (!ref.current) playSound(m.id); }), [client]);
+  return [muted, (m) => { setMuted(m); chrome.storage.local.set({ [MUTE_KEY]: m }).catch(() => undefined); }];
+}
+
+/** A clock that only ticks while `active` (countdowns, "away for 2:13"). */
+export function useNow(active: boolean, ms = 200): number {
+  const [n, setN] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active) return;
+    setN(Date.now());
+    const t = setInterval(() => setN(Date.now()), ms);
+    return () => clearInterval(t);
+  }, [active, ms]);
+  return n;
 }

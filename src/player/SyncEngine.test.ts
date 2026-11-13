@@ -187,4 +187,50 @@ describe('SyncEngine', () => {
     a.video.play(); await settle();
     expect(notice).toHaveBeenCalled();
   });
+
+  describe('shared holds', () => {
+    it('hold pauses without broadcasting, undoes a play attempt, and ignores remote playback', async () => {
+      const { a, b } = makePair();
+      a.video.play(); await settle();
+      expect(b.video.paused).toBe(false);
+      const before = userMsgs(a).length;
+
+      a.engine.hold(); b.engine.hold(); await settle();
+      expect(a.video.paused).toBe(true);
+      expect(b.video.paused).toBe(true);
+      expect(userMsgs(a)).toHaveLength(before); // hold()'s own pause was swallowed by the guard
+
+      const attempts: boolean[] = [];
+      a.engine.on('heldPlayAttempt', () => attempts.push(true));
+      a.video.play(); await settle();
+      expect(a.video.paused).toBe(true);        // play is undone while held
+      expect(attempts).toHaveLength(1);
+      expect(userMsgs(a)).toHaveLength(before); // and nothing was sent
+      await settle(10_000);                     // no periodic sync while held either
+      expect(b.video.paused).toBe(true);
+    });
+
+    it('release(play) resumes from the agreed position', async () => {
+      const { a, b } = makePair();
+      a.video.play(); await settle();
+      a.engine.hold(); b.engine.hold(); await settle();
+      a.video.currentTime = 100; b.video.currentTime = 90; // drifted apart while waiting
+      await a.engine.release({ play: true, position: 100 });
+      await b.engine.release({ play: true, position: 100 });
+      expect(a.video.paused).toBe(false);
+      expect(b.video.paused).toBe(false);
+      expect(b.video.currentTime).toBe(100);   // >1 s off: snapped to the agreed position
+      await settle();
+      expect(userMsgs(b)).toHaveLength(0);     // the resume play was a guarded echo, not a user action
+    });
+
+    it('release(no play) leaves the player paused and normal syncing works again', async () => {
+      const { a, b } = makePair();
+      a.engine.hold(); b.engine.hold();
+      await a.engine.release({ play: false }); await b.engine.release({ play: false });
+      expect(a.video.paused).toBe(true);
+      a.video.play(); await settle();
+      expect(b.video.paused).toBe(false);
+    });
+  });
 });

@@ -9,7 +9,13 @@ type Events = {
   /** Fired when the player video appears/disappears/changes (also on Netflix's SPA navigation). */
   player: { status: PlayerStatus; video: HTMLVideoElement | null; titleId: string | null };
   event: { type: VideoEventType; video: HTMLVideoElement };
+  /** The player ran out of data (true) / has been comfortably playable again for a moment (false). */
+  buffer: boolean;
 };
+
+const BUFFER_AFTER_MS = 800;   // ignore the tiny stalls every seek causes
+const BUFFER_STABLE_MS = 1200; // readyState must stay >= HAVE_FUTURE_DATA this long before we call it recovered
+const BUFFER_GIVE_UP_MS = 45_000; // never deadlock the pair on a stuck player
 
 const NOT_FOUND_AFTER_MS = 10_000;
 
@@ -27,6 +33,11 @@ export class VideoWatcher extends Emitter<Events> {
   private timer: ReturnType<typeof setInterval> | null = null;
   private handlers = new Map<VideoEventType, () => void>();
   private scheduled = false;
+  private buffering = false;
+  private waitTimer: ReturnType<typeof setTimeout> | null = null;
+  private bufPoll: ReturnType<typeof setInterval> | null = null;
+  private bufStart = 0;
+  private bufStableSince = 0;
 
   start() {
     this.mo = new MutationObserver(() => this.scheduleCheck());
@@ -69,9 +80,60 @@ export class VideoWatcher extends Emitter<Events> {
       this.handlers.set(type, h);
       video.addEventListener(type, h);
     }
+    video.addEventListener('waiting', this.onWaiting);
+    video.addEventListener('stalled', this.onWaiting);
+    video.addEventListener('playing', this.onResumed);
+    video.addEventListener('canplay', this.onResumed);
+  }
+
+  // ---- buffering ---------------------------------------------------------------------------
+  // `waiting` fires on every seek, so it only counts once the stall lasts a moment. Recovery is polled
+  // (readyState), because a paused video fires no `playing` event.
+
+  private onWaiting = () => {
+    if (this.buffering || this.waitTimer) return;
+    this.waitTimer = setTimeout(() => {
+      this.waitTimer = null;
+      const v = this.video;
+      if (v && !v.paused && v.readyState < 3) this.setBuffering(true);
+    }, BUFFER_AFTER_MS);
+  };
+
+  private onResumed = () => {
+    if (this.waitTimer && (this.video?.readyState ?? 0) >= 3) { clearTimeout(this.waitTimer); this.waitTimer = null; }
+  };
+
+  private setBuffering(on: boolean) {
+    if (on === this.buffering) return;
+    this.buffering = on;
+    if (this.bufPoll) clearInterval(this.bufPoll);
+    this.bufPoll = null;
+    if (on) {
+      this.bufStart = Date.now();
+      this.bufStableSince = 0;
+      this.bufPoll = setInterval(() => {
+        const v = this.video;
+        const now = Date.now();
+        if (!v || now - this.bufStart > BUFFER_GIVE_UP_MS) return this.setBuffering(false);
+        if (v.readyState >= 3) {
+          this.bufStableSince ||= now;
+          if (now - this.bufStableSince >= BUFFER_STABLE_MS) this.setBuffering(false);
+        } else this.bufStableSince = 0;
+      }, 250);
+    }
+    this.emit('buffer', on);
   }
 
   private detach() {
+    if (this.waitTimer) clearTimeout(this.waitTimer);
+    this.waitTimer = null;
+    if (this.video) {
+      this.video.removeEventListener('waiting', this.onWaiting);
+      this.video.removeEventListener('stalled', this.onWaiting);
+      this.video.removeEventListener('playing', this.onResumed);
+      this.video.removeEventListener('canplay', this.onResumed);
+    }
+    this.setBuffering(false);
     if (this.video) for (const [type, h] of this.handlers) this.video.removeEventListener(type, h);
     this.handlers.clear();
     this.video = null;

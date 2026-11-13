@@ -32,6 +32,8 @@ type Events = {
   status: { sync: SyncStatus; driftMs: number | null };
   follow: 'none' | 'following' | 'followed';
   notice: string | null;
+  /** The user tried to press play while a shared hold (buffering / brb / ready check) is active. */
+  heldPlayAttempt: true;
 };
 
 const GUARD_MS = 2500;       // how long after applying a remote command we expect the echo events
@@ -70,6 +72,8 @@ export class SyncEngine extends Emitter<Events> {
   private following = false;      // I mirror the peer (I never send playback commands)
   private followedByPeer = false; // the peer mirrors me (I am the only reference)
   private tick = 0;
+  private held = false;           // a shared hold is active: nothing plays, nothing is broadcast
+  private lastHeldNotice = 0;
 
   constructor(private deps: SyncDeps) {
     super();
@@ -131,6 +135,16 @@ export class SyncEngine extends Emitter<Events> {
     if (!v || this.stopped) return;
     const now = this.now();
     if (type === 'ratechange' || type === 'ended') return;
+    if (this.held) {
+      // Our own pause (from hold()) is swallowed; a user pressing play is undone: both sides are waiting.
+      if (type === 'pause') this.consume('pause');
+      else if (type === 'play' && !this.consume('play')) {
+        this.guards.pause = { until: now + GUARD_MS };
+        v.pause();
+        if (now - this.lastHeldNotice > 3000) { this.lastHeldNotice = now; this.emit('heldPlayAttempt', true); }
+      }
+      return;
+    }
     if (this.following) return; // followers never publish: the friend is the only reference
     if (type === 'play' && this.consume('play')) return;
     if (type === 'pause' && this.consume('pause')) return;
@@ -187,7 +201,7 @@ export class SyncEngine extends Emitter<Events> {
   }
 
   private tickPeriodic() {
-    if (this.stopped) return;
+    if (this.stopped || this.held) return;
     if (this.following && ++this.tick % 5 === 0) this.sendType('FOLLOW_START'); // heartbeat: survives a lost message / peer reload
     if (this.following || !this.video || !(this.followedByPeer || this.deps.isAuthority())) return;
     if (this.peerStatus !== 'ready' || !this.sameTitle()) return;
@@ -245,6 +259,7 @@ export class SyncEngine extends Emitter<Events> {
     }
     this.peerStatus = 'ready';
     this.peerTitle = msg.titleId;
+    if (this.held) { this.refreshStatus(); return; } // a shared hold owns playback until it is released
 
     const v = this.video;
     if (!v || this.localStatus !== 'ready' || !msg.state) { this.refreshStatus(); return; }
@@ -272,6 +287,30 @@ export class SyncEngine extends Emitter<Events> {
     }
     this.refreshStatus();
   }
+
+  // ---- shared holds (buffering / brb / ready check) ---------------------------------------
+
+  /** Pause and take playback offline for both sides. Safe without a player (the hold is still tracked). */
+  hold() {
+    if (this.stopped) return;
+    this.held = true;
+    const v = this.video;
+    if (v && !v.paused) { this.guards.pause = { until: this.now() + GUARD_MS }; v.pause(); }
+  }
+
+  /** End a hold. With `play`, jump to `position` if we are more than ~1 s off, then start playing. */
+  async release(opts: { play: boolean; position?: number | null }) {
+    this.held = false;
+    const v = this.video;
+    if (this.stopped || !v || this.localStatus !== 'ready' || !opts.play) return;
+    const known = opts.position !== undefined && opts.position !== null;
+    try {
+      await this.applyState(v, known ? opts.position! : v.currentTime, true, this.baseRate, known ? 1 : Infinity, this.deps.config().useBridge);
+    } catch (e) { log.warn('failed to resume after hold', errorMessage(e)); }
+    this.refreshStatus();
+  }
+
+  get isHeld() { return this.held; }
 
   private armSeekGuard(position: number) { this.guards.seek = { until: this.now() + GUARD_MS, position }; }
 
