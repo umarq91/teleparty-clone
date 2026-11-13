@@ -50,35 +50,35 @@ export function Tray(p: TrayProps) {
       initial={{ opacity: 0, y: 8, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8, scale: 0.96 }} transition={SPRING}
       role="dialog" aria-label="Chat, stickers, sounds and party tools"
       onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); p.onClose(); } }}
-      className="glass-deep w-[320px] rounded-3xl p-3"
+      className="surface-float w-[336px] rounded-2xl p-3"
     >
       <div className="mb-2 flex items-center gap-1">
-        <div role="tablist" aria-label="Sections" className="flex min-w-0 flex-1 gap-0.5 rounded-2xl bg-black/25 p-1">
+        <div role="tablist" aria-label="Sections" className="flex min-w-0 flex-1 gap-0.5 rounded-xl bg-[#0b0f1d] p-1">
           {TABS.map((t) => {
             const active = p.tab === t.id;
             return (
               <motion.button
                 key={t.id} layout role="tab" type="button" aria-selected={active} aria-label={t.label} title={t.label}
                 onMouseDown={(e) => e.preventDefault()} onClick={() => p.onTab(t.id)} transition={SPRING}
-                className={`focus-candy relative flex h-8 items-center justify-center gap-1 rounded-xl text-[11.5px] font-bold ${active ? 'flex-[2.3] text-grape-950' : 'flex-1 text-white/70 hover:text-white'}`}
+                className={`focus-candy relative flex h-8 items-center justify-center gap-1 rounded-xl text-[12px] font-bold ${active ? 'flex-[2.3] text-grape-950' : 'flex-1 text-soft hover:text-white'}`}
               >
-                {active && <motion.span layoutId="tray-tab" transition={SPRING} className="absolute inset-0 rounded-xl bg-lemon" />}
+                {active && <motion.span layoutId="tray-tab" transition={SPRING} className="absolute inset-0 rounded-lg bg-lemon" />}
                 <t.icon size={15} className="relative shrink-0" />
                 {active && <span className="relative">{t.label}</span>}
               </motion.button>
             );
           })}
         </div>
-        <button type="button" aria-label="Close" onMouseDown={(e) => e.preventDefault()} onClick={p.onClose} className="focus-candy flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white/70 hover:bg-white/10 hover:text-white"><X size={16} /></button>
+        <button type="button" aria-label="Close" onMouseDown={(e) => e.preventDefault()} onClick={p.onClose} className="focus-candy flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-soft hover:bg-white/10 hover:text-white"><X size={16} /></button>
       </div>
 
       {searchable && (
         <div className="relative mb-2">
-          <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-white/60" />
+          <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-mute" />
           <input
             value={q} onChange={(e) => setQ(e.target.value)} autoFocus aria-label="Search"
             placeholder={p.tab === 'emoji' ? 'Search emoji… (try “cry”)' : p.tab === 'stickers' ? 'Search stickers on the internet…' : 'Search GIFs on the internet…'}
-            className="h-9 w-full rounded-xl border border-white/15 bg-black/25 pl-8 pr-2 text-[12.5px] text-white outline-none placeholder:text-white/50 focus:border-lemon/70"
+            className="h-9 w-full rounded-xl border border-[#46527f] bg-[#0b0f1d] pl-8 pr-2 text-[14px] text-white outline-none placeholder:text-mute focus:border-lemon"
           />
         </div>
       )}
@@ -90,8 +90,8 @@ export function Tray(p: TrayProps) {
         {p.tab === 'sounds' && <SoundsTab {...p} />}
         {p.tab === 'party' && <PartyTab {...p} />}
       </div>
-      {!p.connected && <p className="mt-1.5 text-center text-[11px] text-white/60">Connect with {p.peerName} to send things.</p>}
-      {(p.tab === 'stickers' || p.tab === 'gifs') && <div className="mt-1 text-right text-[10px] text-white/50">Powered by GIPHY</div>}
+      {!p.connected && <p className="mt-1.5 text-center text-[12px] text-mute">Connect with {p.peerName} to send things.</p>}
+      {(p.tab === 'stickers' || p.tab === 'gifs') && <div className="mt-1 text-right text-[12px] text-mute">Powered by GIPHY</div>}
     </motion.div>
   );
 }
@@ -109,7 +109,7 @@ function ChatTab({ chat, connected, peerName, onChat }: TrayProps) {
         {chat.length === 0 && <Empty text={`Say something to ${peerName}. It floats over the movie, then fades.`} icon={<MessageCircle size={20} className="text-sky" />} />}
         {chat.map((m) => (
           <div key={m.key} className={`flex ${m.mine ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[85%] rounded-2xl px-2.5 py-1.5 text-[12.5px] leading-[17px] ${m.mine ? 'rounded-br-md bg-sky/30' : 'rounded-bl-md bg-white/10'} ${m.kind === 'sound' ? 'italic text-white/75' : 'text-white'}`}>
+            <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-[14px] leading-5 ${m.mine ? 'rounded-br-md bg-[#174a68]' : 'rounded-bl-md bg-[#222b4a]'} ${m.kind === 'sound' ? 'italic text-soft' : 'text-white'}`}>
               {m.kind === 'sound' ? <><b className="not-italic">{m.from}</b> {m.text}</> : <span className="break-words">{m.text}</span>}
             </div>
           </div>
@@ -120,12 +120,12 @@ function ChatTab({ chat, connected, peerName, onChat }: TrayProps) {
         <input
           value={text} onChange={(e) => setText(e.target.value)} maxLength={200} disabled={!connected} autoFocus aria-label="Message"
           placeholder={connected ? `Message ${peerName}…` : 'Waiting for your friend…'}
-          className="h-10 min-w-0 flex-1 rounded-xl border border-white/15 bg-black/25 px-3 text-[13px] text-white outline-none placeholder:text-white/50 focus:border-lemon/70 disabled:opacity-50"
+          className="h-11 min-w-0 flex-1 rounded-xl border border-[#46527f] bg-[#0b0f1d] px-3 text-[14px] text-white outline-none placeholder:text-mute focus:border-lemon disabled:opacity-50"
         />
         <motion.button
           type="submit" disabled={!connected || !text.trim()} aria-label="Send message" onMouseDown={(e) => e.preventDefault()}
           whileHover={{ y: -1.5 }} whileTap={{ scale: 0.9 }} transition={SPRING}
-          className="focus-candy flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-b from-gum to-gum-deep text-white shadow-candy disabled:opacity-40"
+          className="focus-candy flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gum text-grape-950 disabled:opacity-40"
         ><Send size={16} /></motion.button>
       </form>
     </div>
@@ -195,16 +195,16 @@ function SoundsTab({ connected, muted, onMuted, onSound }: TrayProps) {
           <motion.button
             key={s.id} type="button" disabled={!connected} onMouseDown={(e) => e.preventDefault()} onClick={() => onSound(s.id)} aria-label={`Play ${s.label}`}
             whileHover={{ y: -2, scale: 1.04 }} whileTap={{ scale: 0.88, rotate: -4 }} transition={SPRING}
-            className="focus-candy glass-chip flex h-[84px] flex-col items-center justify-center gap-1 rounded-2xl px-1 disabled:opacity-40"
+            className="focus-candy surface-raised flex h-[84px] flex-col items-center justify-center gap-1 rounded-2xl px-1 disabled:opacity-40"
           >
             <span className="text-[26px] leading-none">{s.emoji}</span>
-            <span className="text-[10.5px] font-bold leading-3 text-white/85">{s.label}</span>
+            <span className="text-[12px] font-bold leading-3 text-soft">{s.label}</span>
           </motion.button>
         ))}
       </div>
       <button
         type="button" role="switch" aria-checked={muted} onMouseDown={(e) => e.preventDefault()} onClick={() => onMuted(!muted)}
-        className="focus-candy mt-2 flex items-center gap-2 self-start rounded-lg px-1.5 py-1 text-[12px] font-semibold text-white/80 hover:text-white"
+        className="focus-candy mt-2 flex items-center gap-2 self-start rounded-lg px-1.5 py-1 text-[12px] font-semibold text-soft hover:text-white"
       >{muted ? <VolumeX size={15} className="text-gum" /> : <Volume2 size={15} className="text-mint" />}{muted ? 'Sounds muted' : 'Sounds on'}</button>
     </div>
   );
@@ -218,17 +218,17 @@ function PartyTab({ connected, party, onReady, onBrb, onClose, peerName }: TrayP
     <motion.button
       type="button" disabled={!connected || busy} onMouseDown={(e) => e.preventDefault()} onClick={() => { action(); onClose(); }}
       whileHover={{ y: -2 }} whileTap={{ scale: 0.97 }} transition={SPRING}
-      className="focus-candy glass-chip flex w-full items-center gap-3 rounded-2xl p-3 text-left disabled:opacity-40"
+      className="focus-candy surface-raised flex w-full items-center gap-3 rounded-2xl p-3 text-left disabled:opacity-40"
     >
-      <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br ${tone} text-grape-950`}>{icon}</span>
-      <span className="min-w-0"><span className="block font-display text-[14px] font-bold text-white">{title}</span><span className="block text-[11.5px] leading-4 text-white/70">{text}</span></span>
+      <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${tone} text-grape-950`}>{icon}</span>
+      <span className="min-w-0"><span className="block font-display text-[14px] font-bold text-white">{title}</span><span className="block text-[12px] leading-4 text-soft">{text}</span></span>
     </motion.button>
   );
   return (
     <div className="flex h-full flex-col gap-2">
-      {card('Ready check', `Pauses both. When ${peerName} says ready, a 3-2-1 starts the movie.`, <SquareCheckBig size={20} />, 'from-mint to-sky', onReady)}
-      {card('Brb', 'Pauses both while you grab snacks. Tap “I’m back” for a 3-2-1.', <Coffee size={20} />, 'from-tang to-gum', onBrb)}
-      <p className="mt-auto text-[11px] leading-4 text-white/60">{busy ? 'Something is already holding the movie. Finish that first.' : 'Videos that buffer pause for both of you automatically.'}</p>
+      {card('Ready check', `Pauses both. When ${peerName} says ready, a 3-2-1 starts the movie.`, <SquareCheckBig size={20} />, 'bg-mint', onReady)}
+      {card('Brb', 'Pauses both while you grab snacks. Tap “I’m back” for a 3-2-1.', <Coffee size={20} />, 'bg-tang', onBrb)}
+      <p className="mt-auto text-[12px] leading-4 text-mute">{busy ? 'Something is already holding the movie. Finish that first.' : 'Videos that buffer pause for both of you automatically.'}</p>
     </div>
   );
 }
@@ -237,7 +237,7 @@ function Empty({ text, pulse, icon }: { text: string; pulse?: boolean; icon?: Re
   return (
     <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center">
       {icon ?? <Sparkles size={20} className={`text-lemon ${pulse ? 'animate-pulse' : ''}`} />}
-      <p className="text-[12px] leading-4 text-white/70">{text}</p>
+      <p className="text-[12px] leading-4 text-soft">{text}</p>
     </div>
   );
 }

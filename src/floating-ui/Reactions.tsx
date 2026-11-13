@@ -19,7 +19,7 @@ export function ReactionLayer({ items }: { items: FloatingReaction[] }) {
             {r.emoji
               ? <span className="text-[64px] leading-none drop-shadow-[0_6px_12px_rgba(0,0,0,.45)]">{r.emoji}</span>
               : <img src={r.gif} alt="" referrerPolicy="no-referrer" className="h-28 max-w-[180px] rounded-2xl object-contain drop-shadow-[0_6px_14px_rgba(0,0,0,.5)]" />}
-            {!r.mine && <span className="glass-chip mt-1 rounded-full px-2 py-0.5 text-[11px] font-bold text-white">{r.from}</span>}
+            {!r.mine && <span className="mt-1 rounded-full bg-[#0e1322] px-2.5 py-1 text-[13px] font-bold text-white">{r.from}</span>}
           </motion.div>
         ))}
       </AnimatePresence>

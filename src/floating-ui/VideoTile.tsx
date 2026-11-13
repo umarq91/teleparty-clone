@@ -41,11 +41,11 @@ export function VideoTile({ stream, label, muted, mirror, hasVideo, micOn, class
     };
   }, [stream]);
 
-  const grad = tint === 'gum' ? 'from-gum to-coral' : 'from-sky to-mint';
+  const grad = tint === 'gum' ? 'bg-gum' : 'bg-sky';
   return (
     // Gradient "frame" made from padding, with the video clipped inside.
     // No `relative` here: callers position the tile (e.g. `absolute` for the picture-in-picture), and the inner box anchors the label.
-    <div className={`rounded-[18px] bg-gradient-to-br ${grad} p-[2px] shadow-[0_8px_24px_-6px_rgb(0_0_0/.6)] ${className}`}>
+    <div className={`rounded-[18px] ${grad} p-[2px]  ${className}`}>
       <div className="relative h-full w-full overflow-hidden rounded-[16px] bg-grape-900">
         <video
           ref={ref}
@@ -55,16 +55,16 @@ export function VideoTile({ stream, label, muted, mirror, hasVideo, micOn, class
           className={`h-full w-full object-cover ${mirror ? '-scale-x-100' : ''} ${hasVideo ? '' : 'invisible'}`}
         />
         {!hasVideo && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-gradient-to-br from-grape-800 to-grape-900">
-            <div className={`flex items-center justify-center rounded-full bg-gradient-to-br ${grad} font-display font-black text-grape-950 ${compact ? 'h-7 w-7 text-[13px]' : 'h-12 w-12 text-[20px]'}`}>
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 from-grape-800 to-grape-900">
+            <div className={`flex items-center justify-center rounded-full ${grad} font-display font-black text-grape-950 ${compact ? 'h-7 w-7 text-[13px]' : 'h-12 w-12 text-[20px]'}`}>
               {label.slice(0, 1).toUpperCase() || '?'}
             </div>
-            {!compact && <CameraOff size={12} className="text-white/60" />}
+            {!compact && <CameraOff size={12} className="text-mute" />}
           </div>
         )}
-        {!(compact && micOn && label === 'You') && <div className={`glass-chip absolute flex items-center gap-1 rounded-full text-white ${compact ? 'bottom-1 left-1 px-1.5 py-px text-[9px]' : 'bottom-2 left-2 px-2 py-0.5 text-[11px]'} font-bold`}>
+        {!(compact && micOn && label === 'You') && <div className={`absolute flex items-center gap-1 rounded-full bg-[#0e1322] text-white ${compact ? 'bottom-1 left-1 px-1.5 py-px text-[11px]' : 'bottom-2 left-2 px-2.5 py-1 text-[13px]'} font-bold`}>
           {!micOn && <MicOff size={compact ? 8 : 10} className="text-gum" />}
-          <span className={`${compact ? 'max-w-[60px]' : 'max-w-[110px]'} truncate`}>{label}</span>
+          <span className={`${compact ? 'max-w-[70px]' : 'max-w-[140px]'} truncate`}>{label}</span>
         </div>}
       </div>
     </div>

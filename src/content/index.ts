@@ -51,7 +51,7 @@ function apply(session: RoomSession | undefined | null, adapter: SiteAdapter) {
 
 async function hostRoom(session: RoomSession, signal: AbortSignal, adapter: SiteAdapter): Promise<void> {
   const client = new RoomClient(session, await getSettings(), adapter);
-  const overlay = mountOverlay(client, buildInviteLink(session), () => { void client.dispose(true); });
+  const overlay = mountOverlay(client, buildInviteLink(session, adapter.origin), () => { void client.dispose(true); });
   let lastPublish = 0;
   let publishTimer: ReturnType<typeof setTimeout> | null = null;
   const publish = () => {

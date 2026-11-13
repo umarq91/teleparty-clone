@@ -19,3 +19,15 @@ describe('invite tokens', () => {
     expect(new Set(Array.from({ length: 200 }, generateSecret)).size).toBe(200);
   });
 });
+
+describe('invite links per site', () => {
+  const t = { roomId, secret: generateSecret() };
+  it('defaults to Netflix and can target YouTube', () => {
+    expect(buildInviteLink(t)).toMatch(/^https:\/\/www\.netflix\.com\/#mtp=/);
+    expect(buildInviteLink(t, 'https://www.youtube.com')).toMatch(/^https:\/\/www\.youtube\.com\/#mtp=/);
+  });
+  it('a YouTube link parses back to the same room', () => {
+    expect(parseInvite(buildInviteLink(t, 'https://www.youtube.com'))).toEqual(t);
+  });
+});
+

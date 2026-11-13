@@ -25,8 +25,9 @@ export function parseToken(raw: string): InviteToken | null {
   return { roomId: roomId.toLowerCase(), secret };
 }
 
-export function buildInviteLink(t: InviteToken): string {
-  return `${NETFLIX_ORIGIN}/#${INVITE_HASH_KEY}=${formatToken(t)}`;
+/** The link opens `origin` (Netflix by default, or YouTube) where the extension offers to join. Either site works for watching. */
+export function buildInviteLink(t: InviteToken, origin: string = NETFLIX_ORIGIN): string {
+  return `${origin}/#${INVITE_HASH_KEY}=${formatToken(t)}`;
 }
 
 /** Accepts a full invite link, a "#mtp=..." hash, or a bare "roomId.secret" code. */

@@ -16,6 +16,9 @@ export default {
         mint: { DEFAULT: '#4df0c0', soft: '#4df0c02b' },
         sky: { DEFAULT: '#5cc8ff', soft: '#5cc8ff2b' },
         tang: { DEFAULT: '#ff9a4d', soft: '#ff9a4d2b' },
+        // text on dark surfaces (contrast >= 7:1 on #171d33)
+        soft: '#d3d9ee',
+        mute: '#a9b3d3',
         coral: { DEFAULT: '#ff8a5b', soft: '#ff8a5b2b' },
       },
       fontFamily: {
@@ -23,9 +26,6 @@ export default {
         display: ['Fredoka', '"SF Pro Rounded"', '"Arial Rounded MT Bold"', '"Varela Round"', 'Nunito', 'system-ui', 'sans-serif'],
       },
       boxShadow: {
-        glass: '0 10px 40px -8px rgb(2 6 16 / .55), inset 0 1px 0 0 rgb(255 255 255 / .22)',
-        candy: '0 6px 18px -4px rgb(255 95 183 / .55), inset 0 1px 0 0 rgb(255 255 255 / .45)',
-        pop: '0 4px 0 0 rgb(0 0 0 / .28)',
       },
       keyframes: {
         wiggle: { '0%,100%': { transform: 'rotate(-4deg)' }, '50%': { transform: 'rotate(4deg)' } },
@@ -43,44 +43,15 @@ export default {
   },
   plugins: [
     plugin(({ addComponents }) => {
+      // Flat, opaque surfaces. Nothing is translucent or blurred, so text stays readable over any video.
       addComponents({
-        // Frosted-glass surfaces
-        '.glass': {
-          background: 'linear-gradient(135deg, rgb(255 255 255 / .13), rgb(255 255 255 / .05))',
-          border: '1px solid rgb(255 255 255 / .18)',
-          'backdrop-filter': 'blur(22px) saturate(1.5)',
-          '-webkit-backdrop-filter': 'blur(22px) saturate(1.5)',
-          'box-shadow': '0 10px 40px -8px rgb(2 6 16 / .55), inset 0 1px 0 0 rgb(255 255 255 / .22)',
-        },
-        '.glass-deep': {
-          background: 'linear-gradient(160deg, rgb(23 37 68 / .8), rgb(10 18 34 / .86))',
-          border: '1px solid rgb(255 255 255 / .16)',
-          'backdrop-filter': 'blur(26px) saturate(1.6)',
-          '-webkit-backdrop-filter': 'blur(26px) saturate(1.6)',
-          'box-shadow': '0 18px 50px -10px rgb(2 6 16 / .7), inset 0 1px 0 0 rgb(255 255 255 / .2)',
-        },
-        '.glass-chip': {
-          background: 'rgb(255 255 255 / .09)',
-          border: '1px solid rgb(255 255 255 / .14)',
-          'backdrop-filter': 'blur(12px)',
-          '-webkit-backdrop-filter': 'blur(12px)',
-        },
-        // Popup / settings backdrop
-        '.aurora': {
-          'background-color': '#0a1222',
-          'background-image':
-            'radial-gradient(60% 50% at 8% 0%, rgb(255 95 183 / .38), transparent 70%), radial-gradient(55% 45% at 100% 12%, rgb(92 200 255 / .30), transparent 70%), radial-gradient(60% 50% at 70% 100%, rgb(255 138 91 / .30), transparent 70%)',
-        },
+        '.surface': { background: '#171d33', border: '1px solid #2f3a5e' },
+        '.surface-raised': { background: '#222b4a', border: '1px solid #3b4772' },
+        '.surface-float': { background: '#121829', border: '1px solid #3b4772', 'box-shadow': '0 10px 30px rgb(0 0 0 / .55)' },
+        '.page': { 'background-color': '#0e1322' },
         '.focus-candy': {
           outline: 'none',
-          '&:focus-visible': { 'box-shadow': '0 0 0 2px #0a1222, 0 0 0 4px #ffe45e' },
-        },
-        '.text-candy': {
-          background: 'linear-gradient(90deg,#ff5fb7,#ffe45e,#4df0c0,#5cc8ff,#ff5fb7)',
-          'background-size': '200% 100%',
-          '-webkit-background-clip': 'text',
-          'background-clip': 'text',
-          color: 'transparent',
+          '&:focus-visible': { 'box-shadow': '0 0 0 2px #0e1322, 0 0 0 4px #ffe45e' },
         },
       });
     }),

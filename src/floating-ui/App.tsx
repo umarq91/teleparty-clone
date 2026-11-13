@@ -7,7 +7,7 @@ import {
 import type { RoomClient } from '@/content/RoomClient';
 import { callLabel, connectionLabel, playerLabel, syncLabel, videoLabel } from '@/shared/statusText';
 import { StatusDot } from '@/shared/ui/StatusDot';
-import { Section, SPRING } from '@/shared/ui/kit';
+import { Logo, Section, SPRING } from '@/shared/ui/kit';
 import { useChat, useDrag, useLiveSettings, useNotice, usePanelMode, useReactions, useRemoteStream, useRoomStatus, useSoundsMuted, type CinemaSize } from './hooks';
 import { ChatLayer, PartyLayer } from './Party';
 import { ReactionLayer } from './Reactions';
@@ -23,31 +23,47 @@ interface Props {
 const CINEMA_W: Record<CinemaSize, number> = { S: 150, M: 220, L: 320 };
 const NEXT_SIZE: Record<CinemaSize, CinemaSize> = { S: 'M', M: 'L', L: 'S' };
 
-/** Round control button. Mouse-down is swallowed so keyboard focus stays on the video (Space = play/pause). */
+/** Icon-only button (compact bars). Mouse-down is swallowed so keyboard focus stays on the video (Space = play/pause). */
 function IconButton({ onClick, active = true, danger, title, small, children }: { onClick: () => void; active?: boolean; danger?: boolean; title: string; small?: boolean; children: React.ReactNode }) {
   return (
     <motion.button
       type="button" title={title} aria-label={title}
       onMouseDown={(e) => e.preventDefault()} onClick={onClick}
-      whileHover={{ y: -2, scale: 1.08 }} whileTap={{ scale: 0.88 }} transition={SPRING}
-      className={`focus-candy flex shrink-0 items-center justify-center rounded-full ${small ? 'h-9 w-9' : 'h-11 w-11'} ${
-        danger ? 'bg-gradient-to-b from-gum to-gum-deep text-white shadow-candy'
-        : active ? 'glass-chip text-white hover:bg-white/20'
-        : 'border border-gum/40 bg-gum/20 text-[#ff9ccf]'}`}
+      whileHover={{ y: -1 }} whileTap={{ scale: 0.92 }} transition={SPRING}
+      className={`focus-candy flex shrink-0 items-center justify-center rounded-xl ${small ? 'h-9 w-9' : 'h-11 w-11'} ${
+        danger ? 'bg-gum text-grape-950'
+        : active ? 'surface-raised text-white hover:bg-[#2c3760]'
+        : 'border border-[#8a2f63] bg-[#3a1730] text-[#ffc2e2]'}`}
     >
       {children}
     </motion.button>
   );
 }
 
-function TextButton({ onClick, disabled, tone = 'glass', title, children }: { onClick: () => void; disabled?: boolean; tone?: 'glass' | 'candy' | 'lemon'; title?: string; children: React.ReactNode }) {
-  const style = tone === 'candy' ? 'bg-gradient-to-b from-gum to-gum-deep text-white shadow-candy'
-    : tone === 'lemon' ? 'bg-lemon text-grape-950' : 'glass-chip text-white';
+/** Icon + visible label, so every control says what it does. */
+function LabelButton({ onClick, label, title, icon, state = 'normal', disabled }: { onClick: () => void; label: string; title?: string; icon: React.ReactNode; state?: 'normal' | 'off' | 'danger'; disabled?: boolean }) {
+  const style = state === 'danger' ? 'bg-gum text-grape-950 font-bold'
+    : state === 'off' ? 'border border-[#8a2f63] bg-[#3a1730] text-[#ffc2e2] font-semibold'
+    : 'surface-raised text-white font-semibold hover:bg-[#2c3760]';
+  return (
+    <motion.button
+      type="button" disabled={disabled} title={title ?? label} onMouseDown={(e) => e.preventDefault()} onClick={onClick}
+      whileHover={disabled ? undefined : { y: -1 }} whileTap={disabled ? undefined : { scale: 0.96 }} transition={SPRING}
+      className={`focus-candy flex min-h-[56px] min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[13px] leading-4 disabled:cursor-not-allowed disabled:opacity-40 ${style}`}
+    >
+      {icon}<span className="max-w-full truncate">{label}</span>
+    </motion.button>
+  );
+}
+
+function TextButton({ onClick, disabled, tone = 'surface', title, children }: { onClick: () => void; disabled?: boolean; tone?: 'surface' | 'candy' | 'lemon'; title?: string; children: React.ReactNode }) {
+  const style = tone === 'candy' ? 'bg-gum text-grape-950'
+    : tone === 'lemon' ? 'bg-lemon text-grape-950' : 'surface-raised text-white hover:bg-[#2c3760]';
   return (
     <motion.button
       type="button" disabled={disabled} title={title} onMouseDown={(e) => e.preventDefault()} onClick={onClick}
-      whileHover={disabled ? undefined : { y: -1.5, scale: 1.015 }} whileTap={disabled ? undefined : { scale: 0.96 }} transition={SPRING}
-      className={`focus-candy flex w-full items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-[12px] font-bold disabled:cursor-not-allowed disabled:opacity-40 ${style}`}
+      whileHover={disabled ? undefined : { y: -1 }} whileTap={disabled ? undefined : { scale: 0.97 }} transition={SPRING}
+      className={`focus-candy flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-[13.5px] font-bold disabled:cursor-not-allowed disabled:opacity-40 ${style}`}
     >{children}</motion.button>
   );
 }
@@ -109,32 +125,27 @@ export function App({ client, inviteLink, onLeave }: Props) {
   const trayAbove = pos.y > window.innerHeight / 2;
   const width = shown === 'full' ? 344 : shown === 'cinema' ? CINEMA_W[size] : 'auto';
 
-  /** Mic / cam / call buttons, shared by full + cinema layouts. */
-  const callButtons = (small?: boolean) => (
+  /** Compact mic / cam / call buttons for the videos-only bar. */
+  const compactCallButtons = () => (
     <>
-      <IconButton small={small} onClick={() => client.toggleMic()} active={c.micOn} title={c.micOn ? 'Mute microphone' : 'Unmute microphone'}>{c.micOn ? <Mic size={small ? 14 : 17} /> : <MicOff size={small ? 14 : 17} />}</IconButton>
-      <IconButton small={small} onClick={() => void client.toggleCam()} active={c.camOn} title={c.camOn ? 'Turn camera off' : 'Turn camera on'}>{c.camOn ? <Video size={small ? 14 : 17} /> : <VideoOff size={small ? 14 : 17} />}</IconButton>
-      {c.active
-        ? <IconButton small={small} onClick={() => client.endCall()} danger title="End call"><PhoneOff size={small ? 14 : 17} /></IconButton>
-        : <IconButton small={small} onClick={startCall} title="Start call"><Phone size={small ? 14 : 17} /></IconButton>}
+      <IconButton small onClick={() => client.toggleMic()} active={c.micOn} title={c.micOn ? 'Mute microphone' : 'Unmute microphone'}>{c.micOn ? <Mic size={16} /> : <MicOff size={16} />}</IconButton>
+      <IconButton small onClick={() => void client.toggleCam()} active={c.camOn} title={c.camOn ? 'Turn camera off' : 'Turn camera on'}>{c.camOn ? <Video size={16} /> : <VideoOff size={16} />}</IconButton>
     </>
   );
 
-  const stickerButton = (small?: boolean) => (
-    <IconButton small={small} onClick={() => openTray()} active={!trayOpen} title="Chat, stickers, sounds & party"><Smile size={small ? 14 : 17} /></IconButton>
-  );
-
   const videos = (compact: boolean) => (
-    <div className={`relative w-full ${compact ? 'aspect-[4/3]' : 'aspect-[4/3]'}`}>
+    <div className="relative aspect-[4/3] w-full">
       <VideoTile stream={remote} label={peerName} hasVideo={c.remoteCamOn} micOn={c.remoteMicOn} compact={compact} className="h-full w-full" />
       {c.active && (
         <VideoTile
           stream={client.media.stream} label="You" muted mirror hasVideo={c.camOn} micOn={c.micOn} tint="sky" compact
-          className={`absolute right-2 top-2 shadow-lg ${compact ? 'h-[32%] w-[34%]' : 'h-[26%] w-[30%]'}`}
+          className={`absolute right-2 top-2 ${compact ? 'h-[32%] w-[34%]' : 'h-[26%] w-[30%]'}`}
         />
       )}
     </div>
   );
+
+  const partyOff = !connected || status.party.hold !== 'none';
 
   return (
     <>
@@ -154,42 +165,41 @@ export function App({ client, inviteLink, onLeave }: Props) {
           <AnimatePresence mode="popLayout" initial={false}>
             {shown === 'pill' && (
               <motion.div
-                key="pill" layout initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }} transition={SPRING}
-                className="glass-deep flex cursor-grab items-center gap-2 rounded-full py-1.5 pl-3 pr-1.5 active:cursor-grabbing"
+                key="pill" layout initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} transition={SPRING}
+                className="surface-float flex cursor-grab items-center gap-2 rounded-2xl py-1.5 pl-3 pr-1.5 active:cursor-grabbing"
                 onPointerDown={(e) => onPointerDown(e, winRef.current)}
               >
-                <StatusDot tone={conn.tone} />
-                <span className="font-display text-[12px] font-extrabold text-candy animate-sheen">PariParty</span>
-                {c.active && <IconButton small onClick={() => client.toggleMic()} active={c.micOn} title={c.micOn ? 'Mute microphone' : 'Unmute microphone'}>{c.micOn ? <Mic size={14} /> : <MicOff size={14} />}</IconButton>}
-                {inCall && <IconButton small onClick={() => setMode('cinema')} title="Videos only"><Clapperboard size={14} /></IconButton>}
-                <IconButton small onClick={() => setMode('full')} title="Open panel"><Maximize2 size={14} /></IconButton>
+                <StatusDot tone={conn.tone} className="!h-2.5 !w-2.5" />
+                <span className="text-[14px] font-bold text-white">PariParty</span>
+                {c.active && <IconButton small onClick={() => client.toggleMic()} active={c.micOn} title={c.micOn ? 'Mute microphone' : 'Unmute microphone'}>{c.micOn ? <Mic size={16} /> : <MicOff size={16} />}</IconButton>}
+                {inCall && <IconButton small onClick={() => setMode('cinema')} title="Videos only"><Clapperboard size={16} /></IconButton>}
+                <IconButton small onClick={() => setMode('full')} title="Open panel"><Maximize2 size={16} /></IconButton>
               </motion.div>
             )}
 
             {shown === 'cinema' && (
               <motion.div
-                key="cinema" layout initial={{ opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.85 }} transition={SPRING}
+                key="cinema" layout initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} transition={SPRING}
                 className="group relative cursor-grab active:cursor-grabbing"
                 onPointerDown={(e) => onPointerDown(e, winRef.current)}
               >
                 {videos(true)}
-                {/* Controls fade in only on hover, so nothing sits on top of the movie while watching. */}
-                <div className={`absolute inset-x-1.5 bottom-1.5 flex justify-center transition-opacity duration-200 motion-reduce:transition-none ${trayOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'}`}>
-                  <div className="glass-deep flex items-center gap-1 rounded-full p-1">
+                {/* Controls appear only on hover or keyboard focus, so nothing sits on the movie while watching. */}
+                <div className={`absolute inset-x-1.5 bottom-1.5 flex justify-center transition-opacity duration-150 motion-reduce:transition-none ${trayOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'}`}>
+                  <div className="surface-float flex items-center gap-1 rounded-2xl p-1">
                     {size === 'S' ? (
-                      <IconButton small onClick={() => client.toggleMic()} active={c.micOn} title={c.micOn ? 'Mute microphone' : 'Unmute microphone'}>{c.micOn ? <Mic size={14} /> : <MicOff size={14} />}</IconButton>
+                      <IconButton small onClick={() => client.toggleMic()} active={c.micOn} title={c.micOn ? 'Mute microphone' : 'Unmute microphone'}>{c.micOn ? <Mic size={16} /> : <MicOff size={16} />}</IconButton>
                     ) : (
                       <>
-                        <IconButton small onClick={() => client.toggleMic()} active={c.micOn} title={c.micOn ? 'Mute microphone' : 'Unmute microphone'}>{c.micOn ? <Mic size={14} /> : <MicOff size={14} />}</IconButton>
-                        <IconButton small onClick={() => void client.toggleCam()} active={c.camOn} title={c.camOn ? 'Turn camera off' : 'Turn camera on'}>{c.camOn ? <Video size={14} /> : <VideoOff size={14} />}</IconButton>
+                        {compactCallButtons()}
                         {size === 'L' && (c.active
-                          ? <IconButton small onClick={() => client.endCall()} danger title="End call"><PhoneOff size={14} /></IconButton>
-                          : <IconButton small onClick={startCall} title="Start call"><Phone size={14} /></IconButton>)}
-                        {stickerButton(true)}
+                          ? <IconButton small onClick={() => client.endCall()} danger title="End call"><PhoneOff size={16} /></IconButton>
+                          : <IconButton small onClick={startCall} title="Start call"><Phone size={16} /></IconButton>)}
+                        <IconButton small onClick={() => openTray()} active={!trayOpen} title="Chat, stickers, sounds and party tools"><Smile size={16} /></IconButton>
                       </>
                     )}
-                    <IconButton small onClick={() => setSize(NEXT_SIZE[size])} title={`Size: ${size} (click to change)`}>{size === 'L' ? <Shrink size={14} /> : <Maximize size={14} />}</IconButton>
-                    <IconButton small onClick={() => setMode('full')} title="Show full panel"><Maximize2 size={14} /></IconButton>
+                    <IconButton small onClick={() => setSize(NEXT_SIZE[size])} title={`Size: ${size} (click to change)`}>{size === 'L' ? <Shrink size={16} /> : <Maximize size={16} />}</IconButton>
+                    <IconButton small onClick={() => setMode('full')} title="Show full panel"><Maximize2 size={16} /></IconButton>
                   </div>
                 </div>
               </motion.div>
@@ -197,117 +207,112 @@ export function App({ client, inviteLink, onLeave }: Props) {
 
             {shown === 'full' && (
               <motion.div
-                key="full" layout initial={{ opacity: 0, scale: 0.92 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.92 }} transition={SPRING}
-                className="glass-deep relative overflow-hidden rounded-[26px]"
+                key="full" layout initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.96 }} transition={SPRING}
+                className="surface-float overflow-hidden rounded-2xl"
               >
-                {/* decorative glow */}
-                <div aria-hidden className="pointer-events-none absolute -right-10 -top-12 h-32 w-32 rounded-full bg-gum/30 blur-3xl" />
-                <div aria-hidden className="pointer-events-none absolute -bottom-12 -left-10 h-32 w-32 rounded-full bg-sky/25 blur-3xl" />
-
                 {/* Header / drag handle */}
-                <div className="relative flex cursor-grab items-center gap-2.5 px-3.5 pb-1 pt-3 active:cursor-grabbing" onPointerDown={(e) => onPointerDown(e, winRef.current)}>
-                  <span aria-hidden className="text-[20px] leading-none animate-bob">🎉</span>
-                  <div className="min-w-0 flex-1">
-                    <div className="font-display text-[15px] font-black leading-4 tracking-tight text-candy animate-sheen">PariParty</div>
-                    <div className="mt-0.5 flex items-center gap-1.5 truncate text-[11px] leading-4 text-white/65">
-                      <StatusDot tone={conn.tone} className="!h-1.5 !w-1.5" />
-                      <span className="truncate">{status.peer ? `${conn.text} · with ${peerName}` : conn.text}</span>
-                    </div>
+                <div className="cursor-grab px-3.5 pb-2 pt-3 active:cursor-grabbing" onPointerDown={(e) => onPointerDown(e, winRef.current)}>
+                  <div className="flex items-center gap-2">
+                  <div className="min-w-0 flex-1"><Logo size="sm" /></div>
+                  {inCall && <button type="button" title="Show only the videos" onMouseDown={(e) => e.preventDefault()} onClick={() => setMode('cinema')} className="focus-candy surface-raised flex h-9 items-center gap-1.5 rounded-xl px-2.5 text-[13px] font-semibold text-white hover:bg-[#2c3760]"><Clapperboard size={15} /> Videos only</button>}
+                  <IconButton small onClick={() => setMode('pill')} title="Minimize"><Minus size={16} /></IconButton>
                   </div>
-                  {inCall && <IconButton small onClick={() => setMode('cinema')} title="Videos only (hide everything else)"><Clapperboard size={14} /></IconButton>}
-                  <IconButton small onClick={() => setMode('pill')} title="Collapse to a pill"><Minus size={14} /></IconButton>
+                  <div className="mt-2 flex items-center gap-2 text-[14px] leading-5 text-soft">
+                    <StatusDot tone={conn.tone} />
+                    <span>{status.peer ? `${conn.text} · with ${peerName}` : conn.text}</span>
+                  </div>
                 </div>
 
-                <div className="relative space-y-2.5 p-3.5 pt-2.5">
+                <div className="space-y-3 p-3.5 pt-1.5">
                   {/* Stage */}
                   <AnimatePresence initial={false} mode="wait">
                     {inCall ? (
-                      <motion.div key="v" initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}>{videos(false)}</motion.div>
+                      <motion.div key="v" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>{videos(false)}</motion.div>
                     ) : (
                       <motion.div key="e" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                        className="glass flex aspect-[16/8] w-full flex-col items-center justify-center gap-2 rounded-2xl text-center">
-                        <span className="text-[30px] leading-none animate-bob">{status.peer ? '📞' : '🛋️'}</span>
-                        <p className="px-4 text-[12px] font-semibold text-white/70">{status.peer ? `Ring ${peerName} for a video call` : 'Waiting for your person to show up'}</p>
-                        <TextButton tone="candy" disabled={!status.peer} onClick={startCall}><Phone size={13} /> Start call</TextButton>
+                        className="surface flex w-full flex-col items-center justify-center gap-2.5 rounded-xl px-4 py-5 text-center">
+                        <p className="text-[14px] font-semibold text-white">{status.peer ? `${peerName} is here. Start a video call?` : 'Waiting for your friend to join…'}</p>
+                        <TextButton tone="candy" disabled={!status.peer} onClick={startCall}><Phone size={16} /> Start video call</TextButton>
                       </motion.div>
                     )}
                   </AnimatePresence>
 
-                  {/* Control dock */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">{callButtons()}</div>
-                    <div className="flex items-center gap-1.5">
-                      {stickerButton()}
-                      <IconButton onClick={() => void copy()} title={copied ? 'Copied!' : 'Copy invite link'}>{copied ? <Check size={17} className="text-mint" /> : <Link2 size={17} />}</IconButton>
-                      {confirmLeave
-                        ? <IconButton onClick={onLeave} danger title="Tap again to leave the room"><Check size={17} /></IconButton>
-                        : <IconButton onClick={() => { setConfirmLeave(true); setTimeout(() => setConfirmLeave(false), 3000); }} title="Leave room"><LogOut size={17} /></IconButton>}
+                  {!c.active && status.peer?.inCall && (
+                    <TextButton tone="lemon" onClick={startCall}>{peerName} is in a call. Join →</TextButton>
+                  )}
+
+                  {/* Call controls */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <LabelButton onClick={() => client.toggleMic()} state={c.micOn ? 'normal' : 'off'} label={c.micOn ? 'Mic on' : 'Mic off'} title={c.micOn ? 'Mute microphone' : 'Unmute microphone'} icon={c.micOn ? <Mic size={20} /> : <MicOff size={20} />} />
+                    <LabelButton onClick={() => void client.toggleCam()} state={c.camOn ? 'normal' : 'off'} label={c.camOn ? 'Camera on' : 'Camera off'} title={c.camOn ? 'Turn camera off' : 'Turn camera on'} icon={c.camOn ? <Video size={20} /> : <VideoOff size={20} />} />
+                    {c.active
+                      ? <LabelButton onClick={() => client.endCall()} state="danger" label="End call" icon={<PhoneOff size={20} />} />
+                      : <LabelButton onClick={startCall} label="Start call" icon={<Phone size={20} />} />}
+                  </div>
+
+                  {/* Do-together tools */}
+                  <div>
+                    <div className="mb-1.5 text-[13px] font-bold text-white">Do together</div>
+                    <div className="grid grid-cols-5 gap-1.5">
+                      <LabelButton onClick={() => client.party.requestReadyCheck()} disabled={partyOff} label="Ready?" title="Ready check: pause both, then count 3-2-1" icon={<SquareCheckBig size={18} />} />
+                      <LabelButton onClick={() => client.party.requestBrb()} disabled={partyOff} label="Brb" title="Pause both while you step away" icon={<Coffee size={18} />} />
+                      <LabelButton onClick={() => openTray('chat')} label="Chat" title="Message your friend" icon={<MessageCircle size={18} />} />
+                      <LabelButton onClick={() => openTray('emoji')} label="Emoji" title="Emoji, stickers and GIFs" icon={<Smile size={18} />} />
+                      <LabelButton onClick={() => openTray('sounds')} label="Sounds" title="Soundboard" icon={<Volume2 size={18} />} />
                     </div>
                   </div>
 
-                  {/* Party shortcuts */}
-                  <div className="grid grid-cols-4 gap-1.5">
-                    {([
-                      ['Ready?', 'Ready check: pause both, then count 3-2-1', <SquareCheckBig size={15} key="r" />, () => client.party.requestReadyCheck(), !connected || status.party.hold !== 'none'],
-                      ['Brb', 'Pause both while you step away', <Coffee size={15} key="b" />, () => client.party.requestBrb(), !connected || status.party.hold !== 'none'],
-                      ['Chat', 'Message your friend', <MessageCircle size={15} key="c" />, () => openTray('chat'), false],
-                      ['Sounds', 'Soundboard', <Volume2 size={15} key="s" />, () => openTray('sounds'), false],
-                    ] as const).map(([label, title, icon, run, off]) => (
-                      <motion.button
-                        key={label} type="button" disabled={off} title={title} onMouseDown={(e) => e.preventDefault()} onClick={run}
-                        whileHover={off ? undefined : { y: -2 }} whileTap={off ? undefined : { scale: 0.93 }} transition={SPRING}
-                        className="focus-candy glass-chip flex h-[52px] flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] font-bold text-white/90 disabled:cursor-not-allowed disabled:opacity-40"
-                      >{icon}{label}</motion.button>
-                    ))}
-                  </div>
-
-                  {!c.active && status.peer?.inCall && (
-                    <TextButton tone="lemon" onClick={startCall}><span>{peerName} is in the call 👀</span><span>Join →</span></TextButton>
+                  {/* Watch-sync actions */}
+                  {status.sync === 'different-title' && status.peer?.titleId && (
+                    <TextButton tone="lemon" onClick={() => client.followPeerTitle()}>{peerName} is watching something else. Go there →</TextButton>
+                  )}
+                  {status.peer && status.sync !== 'different-title' && (
+                    status.follow === 'followed' ? (
+                      <div className="surface rounded-xl px-3 py-2.5 text-center text-[13.5px] font-semibold text-white">{peerName} is following you. Just watch normally.</div>
+                    ) : status.follow === 'following' ? (
+                      <TextButton tone="lemon" onClick={() => client.stopFollowingPeer()} title="Stop mirroring your friend"><RefreshCw size={15} /> Following {peerName}. Tap to stop</TextButton>
+                    ) : (
+                      <TextButton disabled={status.player !== 'ready'} onClick={() => client.followPeer()} title={status.player !== 'ready' ? 'Open a video first' : `Mirror ${peerName}: you will follow their playback`}>
+                        <RefreshCw size={15} /> Jump to {peerName}’s spot
+                      </TextButton>
+                    )
                   )}
 
                   <AnimatePresence initial={false}>
                     {(c.error || notice) && (
                       <motion.div key="n" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
-                        <div className="flex items-start gap-2 rounded-xl border border-lemon/30 bg-lemon/10 px-3 py-2 text-[11.5px] leading-4 text-lemon">
+                        <div role="alert" className="flex items-start gap-2 rounded-xl border border-[#8c7a1f] bg-[#2f2a0f] px-3 py-2.5 text-[13.5px] leading-5 text-lemon">
                           <span className="flex-1">{c.error ?? notice}</span>
-                          {notice && <button onMouseDown={(e) => e.preventDefault()} onClick={dismissNotice} aria-label="Dismiss"><X size={12} /></button>}
+                          {notice && <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={dismissNotice} aria-label="Dismiss" className="focus-candy rounded p-0.5"><X size={15} /></button>}
                         </div>
                       </motion.div>
                     )}
                   </AnimatePresence>
 
-                  {/* Watch-sync actions */}
-                  {status.sync === 'different-title' && status.peer?.titleId && (
-                    <TextButton tone="lemon" onClick={() => client.followPeerTitle()}><span>{peerName} is watching something else</span><span>Go there →</span></TextButton>
-                  )}
-                  {status.peer && status.sync !== 'different-title' && (
-                    status.follow === 'followed' ? (
-                      <div className="glass rounded-xl px-3 py-2 text-center text-[12px] font-semibold text-white/80">{peerName} is following you. Just watch normally 🍿</div>
-                    ) : status.follow === 'following' ? (
-                      <TextButton tone="lemon" onClick={() => client.stopFollowingPeer()} title="Stop mirroring your friend"><RefreshCw size={13} /> Following {peerName} · tap to stop</TextButton>
-                    ) : (
-                      <TextButton disabled={status.player !== 'ready'} onClick={() => client.followPeer()} title={status.player !== 'ready' ? 'Open a video first' : `Mirror ${peerName}: you will follow their playback`}>
-                        <RefreshCw size={13} /> Follow {peerName}
-                      </TextButton>
-                    )
-                  )}
+                  {/* Invite + leave */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <TextButton onClick={() => void copy()}>{copied ? <><Check size={16} className="text-mint" /> Link copied</> : <><Link2 size={16} /> Copy invite link</>}</TextButton>
+                    {confirmLeave
+                      ? <TextButton tone="candy" onClick={onLeave}><Check size={16} /> Tap to confirm</TextButton>
+                      : <TextButton onClick={() => { setConfirmLeave(true); setTimeout(() => setConfirmLeave(false), 3000); }}><LogOut size={16} /> Leave room</TextButton>}
+                  </div>
 
                   {/* Collapsible details */}
-                  <Section title="Under the hood" icon={<Activity size={15} className="text-mint" />} defaultOpen={false} badge={<StatusDot tone={sync.tone} />}>
-                    <dl className="space-y-1.5 text-[11.5px]">
+                  <Section title="Connection details" icon={<Activity size={17} className="text-mint" />} defaultOpen={false} badge={<StatusDot tone={sync.tone} className="!h-2.5 !w-2.5" />}>
+                    <dl className="space-y-2 text-[13px]">
                       {[[status.siteName || 'Player', player], ['Sync', sync], ['Call', call], ...(video ? [['Video', video]] : [])].map(([k, l]) => {
                         const label = l as typeof conn;
                         return (
                           <div key={k as string} className="flex items-start gap-2">
-                            <dt className="w-12 shrink-0 font-bold text-white/65">{k as string}</dt>
-                            <dd className="flex min-w-0 flex-1 items-start gap-1.5 text-white/85"><StatusDot tone={label.tone} className="mt-1 !h-1.5 !w-1.5" /><span>{label.text}</span></dd>
+                            <dt className="w-14 shrink-0 font-bold text-mute">{k as string}</dt>
+                            <dd className="flex min-w-0 flex-1 items-start gap-2 text-white"><StatusDot tone={label.tone} className="mt-1.5 !h-2 !w-2" /><span>{label.text}</span></dd>
                           </div>
                         );
                       })}
                       {video?.fix && (
-                        <div className="pl-14"><button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => void client.fixMedia()} className="focus-candy rounded-lg bg-lemon px-2.5 py-1 text-[11px] font-bold text-grape-950 hover:brightness-105">Fix video (both sides)</button></div>
+                        <div className="pl-16"><button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => void client.fixMedia()} className="focus-candy rounded-lg bg-lemon px-3 py-1.5 text-[13px] font-bold text-grape-950 hover:brightness-105">Fix video (both sides)</button></div>
                       )}
-                      {status.rtt !== null && <div className="pl-14 text-[10.5px] text-white/60">{status.transport === 'datachannel' ? (status.relayed ? 'via TURN relay' : 'direct peer-to-peer') : status.transport === 'relay-fallback' ? 'via server fallback' : ''} · {status.rtt} ms</div>}
+                      {status.rtt !== null && <div className="pl-16 text-[13px] text-mute">{status.transport === 'datachannel' ? (status.relayed ? 'via TURN relay' : 'direct peer-to-peer') : status.transport === 'relay-fallback' ? 'via server fallback' : ''} · {status.rtt} ms</div>}
                     </dl>
                   </Section>
                 </div>
@@ -316,7 +321,7 @@ export function App({ client, inviteLink, onLeave }: Props) {
           </AnimatePresence>
         </LayoutGroup>
 
-        {/* Sticker tray floats beside whichever layout is showing */}
+        {/* Tray floats beside whichever layout is showing */}
         <AnimatePresence>
           {tray && (
             <div className={`absolute left-0 ${trayAbove ? 'bottom-full mb-2' : 'top-full mt-2'}`} style={{ maxWidth: '100vw' }}>
