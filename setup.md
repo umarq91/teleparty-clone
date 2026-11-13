@@ -62,7 +62,8 @@ After changing `.env`: `npm run build`, then click the reload icon on the extens
 
 1. Popup → **Start a party** → copy the invite link → send it.
 2. Your friend opens the link (or pastes it in their popup) and confirms **Join**.
-3. Both open the same Netflix title, then press **Start call** in the PariParty panel.
+3. Both open the same Netflix title or YouTube video, then press **Start call** in the PariParty panel.
+   (Chrome asks for camera/mic permission separately for netflix.com and youtube.com.)
 
 ## Troubleshooting
 

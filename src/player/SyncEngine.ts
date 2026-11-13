@@ -73,6 +73,7 @@ export class SyncEngine extends Emitter<Events> {
   private followedByPeer = false; // the peer mirrors me (I am the only reference)
   private tick = 0;
   private held = false;           // a shared hold is active: nothing plays, nothing is broadcast
+  private passive = false;        // ...and we must not touch the player at all (e.g. while an advert plays)
   private lastHeldNotice = 0;
 
   constructor(private deps: SyncDeps) {
@@ -136,6 +137,7 @@ export class SyncEngine extends Emitter<Events> {
     const now = this.now();
     if (type === 'ratechange' || type === 'ended') return;
     if (this.held) {
+      if (this.passive) return; // an advert is playing: leave the player alone, just don't broadcast
       // Our own pause (from hold()) is swallowed; a user pressing play is undone: both sides are waiting.
       if (type === 'pause') this.consume('pause');
       else if (type === 'play' && !this.consume('play')) {
@@ -291,16 +293,18 @@ export class SyncEngine extends Emitter<Events> {
   // ---- shared holds (buffering / brb / ready check) ---------------------------------------
 
   /** Pause and take playback offline for both sides. Safe without a player (the hold is still tracked). */
-  hold() {
+  hold(opts: { pause?: boolean } = {}) {
     if (this.stopped) return;
     this.held = true;
+    this.passive = opts.pause === false;
     const v = this.video;
-    if (v && !v.paused) { this.guards.pause = { until: this.now() + GUARD_MS }; v.pause(); }
+    if (!this.passive && v && !v.paused) { this.guards.pause = { until: this.now() + GUARD_MS }; v.pause(); }
   }
 
   /** End a hold. With `play`, jump to `position` if we are more than ~1 s off, then start playing. */
   async release(opts: { play: boolean; position?: number | null }) {
     this.held = false;
+    this.passive = false;
     const v = this.video;
     if (this.stopped || !v || this.localStatus !== 'ready' || !opts.play) return;
     const known = opts.position !== undefined && opts.position !== null;

@@ -21,7 +21,8 @@ export interface PartyDeps {
   clockOffset(): number;
   isHost(): boolean;
   /** Pause + block local playback. */
-  hold(): void;
+  /** Pause + block local playback. With `pause: false` (our own advert is playing) only block, never touch the player. */
+  hold(o?: { pause?: boolean }): void;
   release(o: { play: boolean; position?: number | null }): void;
   position(): number | null;
   /** Setting: pause for buffering at all. */
@@ -44,6 +45,8 @@ export class PartyControl extends Emitter<Events> {
   state: PartyState = initialParty();
   private selfBuf = false;
   private peerBuf = false;
+  private selfWhy: 'ad' | null = null;
+  private peerWhy: 'ad' | null = null;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private tickTimer: ReturnType<typeof setInterval> | null;
   private pendingPos: number | null = null;
@@ -58,9 +61,9 @@ export class PartyControl extends Emitter<Events> {
   private msg(op: PartyOp, extra: Partial<PartyMessage> = {}): PartyMessage { return { kind: 'party', v: PROTOCOL_VERSION, op, ...extra }; }
   private set(p: Partial<PartyState>) { this.state = { ...this.state, ...p }; this.emit('state', this.state); }
 
-  private enter(hold: HoldKind, by: PartyState['by'], extra: Partial<PartyState> = {}) {
+  private enter(hold: HoldKind, by: PartyState['by'], extra: Partial<PartyState> = {}, pause = true) {
     this.clearCountdown();
-    this.deps.hold();
+    this.deps.hold({ pause });
     this.set({ hold, by, meReady: false, peerReady: false, countdownTo: null, countdownQuick: false, since: this.state.hold === 'none' ? this.now() : this.state.since, ...extra });
   }
 
@@ -116,16 +119,22 @@ export class PartyControl extends Emitter<Events> {
 
   // ---- local player ------------------------------------------------------------------------------
 
-  setLocalBuffering(on: boolean) {
+  /** `why: 'ad'`: the stall is an advert. Our player is left alone while it plays (you can't usefully pause an ad). */
+  setLocalBuffering(on: boolean, why: 'ad' | null = null) {
     if (!this.deps.bufferHoldEnabled()) return;
     if (on && !this.selfBuf) {
-      if (!this.deps.send(this.msg('buffering'))) return; // can't coordinate: carry on, drift sync will catch up
+      if (!this.deps.send(this.msg('buffering', why ? { why } : {}))) return; // can't coordinate: carry on, drift sync will catch up
       this.selfBuf = true;
-      if (this.state.hold === 'none') this.enter('buffering', this.peerBuf ? 'both' : 'me');
-      else this.refreshBy();
+      this.selfWhy = why;
+      if (this.state.hold === 'none') this.enter('buffering', this.peerBuf ? 'both' : 'me', {}, why !== 'ad');
+      this.refreshBy();
     } else if (!on && this.selfBuf) {
+      const wasAd = this.selfWhy === 'ad';
       this.selfBuf = false;
+      this.selfWhy = null;
       this.deps.send(this.msg('buffered'));
+      // The video carries on by itself after an ad: stop it again so it waits at the agreed spot for the countdown.
+      if (wasAd && this.state.hold === 'buffering') this.deps.hold({ pause: true });
       this.refreshBy();
       this.maybeResumeBuffering();
     }
@@ -154,11 +163,14 @@ export class PartyControl extends Emitter<Events> {
       case 'buffering':
         if (!this.deps.bufferHoldEnabled()) break;
         this.peerBuf = true;
+        this.peerWhy = m.why ?? null;
         if (s.hold === 'none') this.enter('buffering', this.selfBuf ? 'both' : 'peer');
-        else { this.refreshBy(); if (s.hold === 'buffering') this.clearCountdown(), this.set({ countdownTo: null }); }
+        else if (s.hold === 'buffering') { this.clearCountdown(); this.set({ countdownTo: null }); }
+        this.refreshBy();
         break;
       case 'buffered':
         this.peerBuf = false;
+        this.peerWhy = null;
         this.refreshBy();
         this.maybeResumeBuffering();
         break;
@@ -182,6 +194,7 @@ export class PartyControl extends Emitter<Events> {
   /** The friend left or lost connection: never leave someone paused behind a hold nobody can end. */
   peerGone() {
     this.peerBuf = false;
+    this.peerWhy = null;
     if (this.state.hold === 'none') return;
     this.deps.release({ play: false });
     this.reset();
@@ -193,7 +206,7 @@ export class PartyControl extends Emitter<Events> {
     const s = this.state;
     if (s.hold === 'brb' && s.by !== 'peer') this.deps.send(this.msg('brb'));
     else if (s.hold === 'ready-check' && s.by !== 'peer') this.deps.send(this.msg('ready-ask'));
-    else if (this.selfBuf) this.deps.send(this.msg('buffering'));
+    else if (this.selfBuf) this.deps.send(this.msg('buffering', this.selfWhy ? { why: this.selfWhy } : {}));
   }
 
   destroy() {
@@ -208,7 +221,8 @@ export class PartyControl extends Emitter<Events> {
   private refreshBy() {
     if (this.state.hold !== 'buffering') return;
     const by = this.selfBuf && this.peerBuf ? 'both' : this.selfBuf ? 'me' : this.peerBuf ? 'peer' : this.state.by;
-    if (by !== this.state.by) this.set({ by });
+    const why = by === 'me' ? this.selfWhy : by === 'peer' ? this.peerWhy : null;
+    if (by !== this.state.by || why !== this.state.why) this.set({ by, why });
   }
 
   /** The host restarts everyone once nobody is buffering any more. */
@@ -238,6 +252,7 @@ export class PartyControl extends Emitter<Events> {
     this.timer = null;
     this.selfBuf = false;
     this.peerBuf = false;
+    this.selfWhy = this.peerWhy = null;
     this.deps.release({ play: true, position: this.pendingPos });
     this.reset(true);
   }

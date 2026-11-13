@@ -123,7 +123,7 @@ function RoomView({ session, status }: { session: RoomSession; status: RoomStatu
   };
   const leave = async () => { setLeaving(true); await leaveRoom(session.roomId); };
 
-  const conn = live ? connectionLabel(live) : { text: 'Open Netflix to connect', tone: 'idle' as const };
+  const conn = live ? connectionLabel(live) : { text: 'Open Netflix or YouTube to connect', tone: 'idle' as const };
 
   return (
     <div className="space-y-3">
@@ -133,11 +133,11 @@ function RoomView({ session, status }: { session: RoomSession; status: RoomStatu
           <span className="font-display text-[13px] font-extrabold">{conn.text}</span>
         </div>
         <div className="mt-3 space-y-2.5">
-          <Participant name={`${session.displayName} (you)`} tone={live ? 'ok' : 'idle'} sub={live ? playerLabel(live).text : 'Netflix not connected'} hue="from-gum to-coral" />
+          <Participant name={`${session.displayName} (you)`} tone={live ? 'ok' : 'idle'} sub={live ? playerLabel(live).text : 'No video tab connected'} hue="from-gum to-coral" />
           <Participant
             name={live?.peer?.name ?? 'Your person'}
             tone={live?.peer ? 'ok' : 'idle'}
-            sub={live?.peer ? (live.peer.playerStatus === 'ready' ? 'Netflix player ready' : 'In the room') : 'Not here yet… 🦗'}
+            sub={live?.peer ? (live.peer.playerStatus === 'ready' ? 'Video player ready' : 'In the room') : 'Not here yet… 🦗'}
             hue="from-sky to-mint"
           />
         </div>
@@ -159,11 +159,12 @@ function RoomView({ session, status }: { session: RoomSession; status: RoomStatu
       </div>
 
       <div className="flex gap-2">
-        <Button variant="primary" className="h-10 flex-1" onClick={() => void sendRuntime({ type: 'OPEN_NETFLIX' })}><ExternalLink size={14} /> {live ? 'Back to Netflix' : 'Open Netflix'}</Button>
+        <Button variant="primary" className="h-10 flex-1" onClick={() => void sendRuntime({ type: 'OPEN_SITE', site: 'netflix' })}><ExternalLink size={14} /> Netflix</Button>
+        <Button variant="mint" className="h-10 flex-1" onClick={() => void sendRuntime({ type: 'OPEN_SITE', site: 'youtube' })}><ExternalLink size={14} /> YouTube</Button>
         <Button variant="danger" className="h-10" busy={leaving} onClick={() => void leave()}><LogOut size={14} /> Leave</Button>
       </div>
       {live?.error && <p className="rounded-xl border border-gum/30 bg-gum/10 px-3 py-2 text-[12px] leading-4 text-[#ff9ccf]">{live.error}</p>}
-      {!live && <p className="px-1 text-[11.5px] leading-4 text-white/65">The party connects from your Netflix tab. Open Netflix and the PariParty panel pops up. 🎈</p>}
+      {!live && <p className="px-1 text-[11.5px] leading-4 text-white/65">The party connects from your video tab. Open Netflix or YouTube and the PariParty panel pops up. 🎈</p>}
     </div>
   );
 }

@@ -18,11 +18,13 @@ export function connectionLabel(s: RoomStatus): Label {
   }
 }
 
+const site = (s: RoomStatus) => s.siteName || 'Video';
+
 export function playerLabel(s: RoomStatus): Label {
   switch (s.player) {
-    case 'ready': return { text: 'Netflix player detected', tone: 'ok' };
-    case 'not-found': return { text: 'Netflix player not found on this page', tone: 'bad' };
-    case 'none': return { text: s.titleId ? 'Connecting to Netflix…' : 'Open a Netflix title to start', tone: s.titleId ? 'warn' : 'idle' };
+    case 'ready': return { text: `${site(s)} player detected`, tone: 'ok' };
+    case 'not-found': return { text: `${site(s)} player not found on this page`, tone: 'bad' };
+    case 'none': return { text: s.titleId ? `Connecting to ${site(s)}…` : 'Open a video to start', tone: s.titleId ? 'warn' : 'idle' };
   }
 }
 

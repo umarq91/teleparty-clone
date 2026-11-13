@@ -14,7 +14,7 @@ function pair(opts: { latency?: number; offsetBToA?: number; bufferHold?: boolea
       send: (m: PartyMessage) => { setTimeout(() => sides[other].party.handle(m), latency); return true; },
       clockOffset: () => offset,
       isHost: () => host,
-      hold: () => calls.push('hold'),
+      hold: (o) => calls.push(o?.pause === false ? 'hold-passive' : 'hold'),
       release: (o) => calls.push(o.play ? `play@${o.position ?? 'here'}` : 'stay-paused'),
       position: () => 42,
       bufferHoldEnabled: () => opts.bufferHold ?? true,
@@ -160,5 +160,32 @@ describe('clocks', () => {
     // convert b's local timestamp back to real time before comparing
     const delta = Math.abs(a.party.state.countdownTo! - (b.party.state.countdownTo! - 5000));
     expect(delta).toBeLessThan(5);
+  });
+});
+
+describe('ads', () => {
+  it('our own ad holds the friend but leaves OUR player alone, then pauses it again before the countdown', async () => {
+    const { a, b } = pair();
+    b.party.setLocalBuffering(true, 'ad'); await settle();
+    expect(b.calls).toEqual(['hold-passive']);            // the ad itself is never paused
+    expect(a.calls).toEqual(['hold']);                    // the friend is paused
+    expect(a.party.state).toMatchObject({ hold: 'buffering', by: 'peer', why: 'ad' });
+    expect(b.party.state).toMatchObject({ by: 'me', why: 'ad' });
+
+    b.party.setLocalBuffering(false); await settle(100);
+    expect(b.calls).toEqual(['hold-passive', 'hold']);    // content is held at the agreed spot after the ad
+    await settle(1700);
+    expect(a.calls).toEqual(['hold', 'play@42']);
+    expect(b.calls).toEqual(['hold-passive', 'hold', 'play@42']);
+  });
+
+  it('both in an ad: waits for both to finish', async () => {
+    const { a, b } = pair();
+    a.party.setLocalBuffering(true, 'ad'); b.party.setLocalBuffering(true, 'ad'); await settle();
+    expect(a.party.state.by).toBe('both');
+    b.party.setLocalBuffering(false); await settle(2000);
+    expect(a.calls).not.toContain('play@42');
+    a.party.setLocalBuffering(false); await settle(2000);
+    expect(a.calls).toContain('play@42');
   });
 });

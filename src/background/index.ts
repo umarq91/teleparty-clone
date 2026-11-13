@@ -1,13 +1,19 @@
-import { DEFAULT_SETTINGS, NETFLIX_ORIGIN, STORAGE_SETTINGS_KEY } from '@/shared/constants';
+import { DEFAULT_SETTINGS, NETFLIX_ORIGIN, STORAGE_SETTINGS_KEY, YOUTUBE_ORIGIN } from '@/shared/constants';
 import { isRuntimeMessage, type StickerResult, type StickerSearchResponse } from '@/shared/messaging';
 import { getSettings } from '@/shared/storage';
 import { isAllowedGifUrl } from '@/shared/protocol';
 
 /**
  * The service worker is deliberately thin: WebRTC and Realtime need a long-lived DOM context, which
- * a service worker is not, so they run in the Netflix tab (see content/). The worker only handles
- * install defaults, opening Netflix, and the toolbar badge.
+ * a service worker is not, so they run in the video tab (see content/). The worker only handles
+ * install defaults, opening Netflix/YouTube, and the toolbar badge.
  */
+
+/**
+ * The overlay publishes live room status to chrome.storage.session for the popup. Content scripts can't
+ * touch session storage unless it is opened to them, so do that every time the worker starts.
+ */
+void chrome.storage.session.setAccessLevel({ accessLevel: 'TRUSTED_AND_UNTRUSTED_CONTEXTS' }).catch(() => undefined);
 
 chrome.runtime.onInstalled.addListener(async ({ reason }) => {
   if (reason === 'install') {
@@ -20,16 +26,16 @@ chrome.runtime.onInstalled.addListener(async ({ reason }) => {
 chrome.runtime.onMessage.addListener((msg: unknown, _sender, sendResponse) => {
   if (!isRuntimeMessage(msg)) return false;
   switch (msg.type) {
-    case 'OPEN_NETFLIX': {
+    case 'OPEN_SITE': {
       void (async () => {
-        const path = msg.path && /^\/[\w\-/?=&.%]*$/.test(msg.path) ? msg.path : '/';
-        const tabs = await chrome.tabs.query({ url: `${NETFLIX_ORIGIN}/*` });
+        const origin = msg.site === 'youtube' ? YOUTUBE_ORIGIN : NETFLIX_ORIGIN;
+        const tabs = await chrome.tabs.query({ url: `${origin}/*` });
         const tab = tabs[0];
         if (tab?.id !== undefined) {
           await chrome.tabs.update(tab.id, { active: true });
           if (tab.windowId !== undefined) await chrome.windows.update(tab.windowId, { focused: true });
         } else {
-          await chrome.tabs.create({ url: NETFLIX_ORIGIN + path });
+          await chrome.tabs.create({ url: origin + '/' });
         }
         sendResponse({ ok: true });
       })();

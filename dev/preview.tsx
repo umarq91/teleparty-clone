@@ -20,6 +20,8 @@ const PARTIES: Record<string, PartyState> = {
   brbme: { ...initialParty(), hold: 'brb', by: 'me', since: now - 20_000 },
   buffer: { ...initialParty(), hold: 'buffering', by: 'peer', since: now },
   bufferme: { ...initialParty(), hold: 'buffering', by: 'me', since: now },
+  adpeer: { ...initialParty(), hold: 'buffering', by: 'peer', why: 'ad', since: now },
+  adme: { ...initialParty(), hold: 'buffering', by: 'me', why: 'ad', since: now },
   ask: { ...initialParty(), hold: 'ready-check', by: 'peer', peerReady: true, since: now },
   wait: { ...initialParty(), hold: 'ready-check', by: 'me', meReady: true, since: now },
   count: { ...initialParty(), hold: 'brb', by: 'me', since: now, countdownTo: now + 2400 },
@@ -38,7 +40,7 @@ function Backdrop({ children }: { children: React.ReactNode }) {
 
 function fakeClient(partyKey: string) {
   const status: RoomStatus = {
-    ...initialStatus(), phase: 'connected', roomId: 'r', role: 'host', selfName: 'Umar', transport: 'datachannel', rtt: 42, player: 'ready', sync: 'in-sync',
+    ...initialStatus(), phase: 'connected', roomId: 'r', role: 'host', selfName: 'Umar', transport: 'datachannel', rtt: 42, siteName: q.get('site') ?? 'YouTube', player: 'ready', sync: 'in-sync',
     peer: { userId: 'p', name: 'Sam', playerStatus: 'ready', titleId: '80100172', inCall: q.get('call') !== '0' },
     call: { ...initialStatus().call, active: q.get('call') !== '0', micOn: true, camOn: false, remoteMicOn: true, remoteCamOn: false, quality: 'good' },
     party: PARTIES[partyKey] ?? initialParty(),

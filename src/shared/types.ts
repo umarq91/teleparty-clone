@@ -74,6 +74,8 @@ export interface RoomStatus {
   call: CallStatus;
   /** Shared pauses / ready checks / countdowns. */
   party: PartyState;
+  /** Which site this tab is on ("Netflix", "YouTube"). */
+  siteName: string;
   hostingTab: boolean;
   updatedAt: number;
 }
@@ -91,11 +93,13 @@ export interface PartyState {
   countdownTo: number | null;
   /** Short countdown for buffering recovery (a toast, not the big 3-2-1). */
   countdownQuick: boolean;
+  /** buffering: the wait is because of an advert (YouTube), not a slow connection. */
+  why: 'ad' | null;
   /** Epoch ms of the last resume, so the UI can flash "GO!". */
   goAt: number;
 }
 
-export const initialParty = (): PartyState => ({ hold: 'none', by: null, meReady: false, peerReady: false, since: 0, countdownTo: null, countdownQuick: false, goAt: 0 });
+export const initialParty = (): PartyState => ({ hold: 'none', by: null, meReady: false, peerReady: false, since: 0, countdownTo: null, countdownQuick: false, why: null, goAt: 0 });
 
 export interface CallStatus {
   active: boolean;
@@ -134,6 +138,7 @@ export const initialStatus = (): RoomStatus => ({
     quality: 'unknown', iceState: 'new', rxVideo: null, rxAudio: null, txVideo: null, peerRxVideo: null, peerRxAudio: null, error: null,
   },
   party: initialParty(),
+  siteName: '',
   hostingTab: false,
   updatedAt: Date.now(),
 });

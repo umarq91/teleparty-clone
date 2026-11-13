@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Coffee, Hourglass, Loader2, MessageCircle, Play, SquareCheckBig, Volume2, X } from 'lucide-react';
+import { Coffee, Hourglass, Loader2, Megaphone, MessageCircle, Play, SquareCheckBig, Volume2, X } from 'lucide-react';
 import type { PartyControl } from '@/content/PartyControl';
 import type { PartyState } from '@/shared/types';
 import { SPRING } from '@/shared/ui/kit';
@@ -48,7 +48,7 @@ function ToastButton({ onClick, primary, children }: { onClick: () => void; prim
   );
 }
 
-interface Toast { key: string; icon: ReactNode; tone: string; title: string; sub?: string; actions: ReactNode }
+interface Toast { key: string; icon: ReactNode; tone: string; title: string; sub?: string; actions: ReactNode | null }
 
 function describe(p: PartyState, peer: string, party: PartyControl, now: number): Toast | null {
   const away = fmt(now - p.since);
@@ -58,6 +58,12 @@ function describe(p: PartyState, peer: string, party: PartyControl, now: number)
   if (p.countdownTo !== null) return null; // the big numerals take over
   switch (p.hold) {
     case 'buffering': {
+      if (p.why === 'ad' && p.by === 'me') {
+        return { key: 'ad-me', tone: 'from-lemon to-tang', icon: <Megaphone size={17} />, title: 'An ad is playing', sub: `${peer} is paused so you don’t miss anything. We restart together after it.`, actions: null };
+      }
+      if (p.why === 'ad' && p.by === 'peer') {
+        return { key: 'ad-peer', tone: 'from-lemon to-tang', icon: <Megaphone size={17} />, title: `${peer} is watching an ad`, sub: 'Paused for both of us. We restart together after it.', actions: <ToastButton onClick={() => party.resumeNow()}>Don’t wait</ToastButton> };
+      }
       const waiting = p.by === null;
       return {
         key: 'buf', tone: 'from-lemon to-tang', icon: <Loader2 size={17} className="animate-spin" />,
@@ -131,7 +137,7 @@ export function PartyLayer({ party: p, control, peerName, notice, onDismissNotic
                 <div className="font-display text-[14px] font-bold leading-5 text-white">{toast.title}</div>
                 {toast.sub && <div className="text-[12px] leading-4 text-white/70">{toast.sub}</div>}
               </div>
-              <div className="flex items-center gap-1.5">{toast.actions}</div>
+              {toast.actions && <div className="flex items-center gap-1.5">{toast.actions}</div>}
             </motion.div>
           )}
           {!toast && notice && p.hold === 'none' && (

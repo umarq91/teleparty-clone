@@ -16,7 +16,7 @@ export function describeMediaError(e: unknown): string {
   switch (name) {
     case 'NotAllowedError':
     case 'SecurityError':
-      return 'Camera/microphone access was blocked. Click the camera icon in the address bar (or Netflix site settings) to allow it, then try again.';
+      return 'Camera/microphone access was blocked. Click the camera icon in the address bar (or the site settings) to allow it, then try again.';
     case 'NotFoundError':
     case 'OverconstrainedError':
       return 'No camera or microphone was found.';

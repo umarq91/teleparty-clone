@@ -23,7 +23,7 @@ interface Props {
 const CINEMA_W: Record<CinemaSize, number> = { S: 150, M: 220, L: 320 };
 const NEXT_SIZE: Record<CinemaSize, CinemaSize> = { S: 'M', M: 'L', L: 'S' };
 
-/** Round control button. Mouse-down is swallowed so keyboard focus stays on Netflix (Space = play/pause). */
+/** Round control button. Mouse-down is swallowed so keyboard focus stays on the video (Space = play/pause). */
 function IconButton({ onClick, active = true, danger, title, small, children }: { onClick: () => void; active?: boolean; danger?: boolean; title: string; small?: boolean; children: React.ReactNode }) {
   return (
     <motion.button
@@ -145,7 +145,7 @@ export function App({ client, inviteLink, onLeave }: Props) {
         ref={winRef}
         className="mtp-root pointer-events-auto fixed select-none"
         style={{ left: pos.x, top: pos.y, width, zIndex: 2147483000 }}
-        // Don't let Netflix see keystrokes/clicks aimed at our UI.
+        // Don't let the site see keystrokes/clicks aimed at our UI.
         onKeyDown={(e) => e.stopPropagation()}
         onKeyUp={(e) => e.stopPropagation()}
         onDoubleClick={(e) => e.stopPropagation()}
@@ -286,7 +286,7 @@ export function App({ client, inviteLink, onLeave }: Props) {
                     ) : status.follow === 'following' ? (
                       <TextButton tone="lemon" onClick={() => client.stopFollowingPeer()} title="Stop mirroring your friend"><RefreshCw size={13} /> Following {peerName} · tap to stop</TextButton>
                     ) : (
-                      <TextButton disabled={status.player !== 'ready'} onClick={() => client.followPeer()} title={status.player !== 'ready' ? 'Open a movie on Netflix first' : `Mirror ${peerName}: you will follow their playback`}>
+                      <TextButton disabled={status.player !== 'ready'} onClick={() => client.followPeer()} title={status.player !== 'ready' ? 'Open a video first' : `Mirror ${peerName}: you will follow their playback`}>
                         <RefreshCw size={13} /> Follow {peerName}
                       </TextButton>
                     )
@@ -295,7 +295,7 @@ export function App({ client, inviteLink, onLeave }: Props) {
                   {/* Collapsible details */}
                   <Section title="Under the hood" icon={<Activity size={15} className="text-mint" />} defaultOpen={false} badge={<StatusDot tone={sync.tone} />}>
                     <dl className="space-y-1.5 text-[11.5px]">
-                      {[['Netflix', player], ['Sync', sync], ['Call', call], ...(video ? [['Video', video]] : [])].map(([k, l]) => {
+                      {[[status.siteName || 'Player', player], ['Sync', sync], ['Call', call], ...(video ? [['Video', video]] : [])].map(([k, l]) => {
                         const label = l as typeof conn;
                         return (
                           <div key={k as string} className="flex items-start gap-2">

@@ -12,7 +12,7 @@ import { LocalMedia } from '@/webrtc/LocalMedia';
 import { SyncEngine } from '@/player/SyncEngine';
 import { VideoWatcher } from '@/player/VideoWatcher';
 import { seekVideo } from '@/player/seek';
-import { watchUrl } from '@/player/netflix';
+import { urlForTitle, type SiteAdapter } from '@/player/sites';
 import { PartyControl } from './PartyControl';
 
 type Events = {
@@ -40,8 +40,8 @@ function iceServers(s: Settings): RTCIceServer[] {
 
 /**
  * Orchestrates one participant's side of a room: signaling channel, peer link, local media,
- * the Netflix player watcher and the sync engine. Pure logic, no React.
- * Lives in the content script of exactly one Netflix tab (guarded by a Web Lock).
+ * the player watcher and the sync engine. Pure logic, no React.
+ * Lives in the content script of exactly one tab on a supported site (Web Lock per site + a cross-site lease).
  */
 export class RoomClient extends Emitter<Events> {
   readonly media = new LocalMedia();
@@ -57,7 +57,7 @@ export class RoomClient extends Emitter<Events> {
   private chanStatus: ChannelStatus = 'connecting';
   private chanError: string | null = null;
   private status: RoomStatus = initialStatus();
-  private watcher = new VideoWatcher();
+  private watcher: VideoWatcher;
   private sync: SyncEngine;
   private gen = randomId(6);
   private heartbeat: ReturnType<typeof setInterval> | null = null;
@@ -70,8 +70,9 @@ export class RoomClient extends Emitter<Events> {
   private emitQueued = false;
   private unsubMedia: (() => void) | null = null;
 
-  constructor(private session: RoomSession, private settings: Settings) {
+  constructor(private session: RoomSession, private settings: Settings, private adapter: SiteAdapter) {
     super();
+    this.watcher = new VideoWatcher(adapter);
     this.sync = new SyncEngine({
       send: (m) => this.sendSync(m),
       clockOffset: () => this.clockOffset,
@@ -81,7 +82,7 @@ export class RoomClient extends Emitter<Events> {
         seekSec: this.settings.driftSeekSec,
         seekCooldownMs: 5000,
         maxRateDelta: 0.08,
-        useBridge: this.settings.useNetflixSeekBridge,
+        useBridge: this.settings.useNetflixSeekBridge && adapter.supportsSeekBridge,
       }),
       seek: (v, sec, bridge) => seekVideo(v as HTMLVideoElement, sec, bridge),
     });
@@ -89,7 +90,7 @@ export class RoomClient extends Emitter<Events> {
       send: (m) => this.sendPeer(m),
       clockOffset: () => this.clockOffset,
       isHost: () => this.session.role === 'host',
-      hold: () => this.sync.hold(),
+      hold: (o) => this.sync.hold(o),
       release: (o) => { void this.sync.release(o); },
       position: () => this.watcher.current?.currentTime ?? null,
       bufferHoldEnabled: () => this.settings.waitForBuffering,
@@ -106,9 +107,9 @@ export class RoomClient extends Emitter<Events> {
   // ---- lifecycle --------------------------------------------------------------------------
 
   async start() {
-    this.patch({ roomId: this.session.roomId, role: this.session.role, selfName: this.session.displayName, phase: 'connecting', hostingTab: true });
+    this.patch({ roomId: this.session.roomId, role: this.session.role, selfName: this.session.displayName, phase: 'connecting', hostingTab: true, siteName: this.adapter.name });
 
-    // Player side runs regardless of the network so the user sees "Netflix player detected" early.
+    // Player side runs regardless of the network so the user sees "player detected" early.
     this.sync.on('status', ({ sync, driftMs }) => this.patch({ sync, driftMs }));
     this.sync.on('notice', (n) => this.emit('notice', n));
     this.sync.on('follow', (follow) => this.patch({ follow }));
@@ -120,7 +121,7 @@ export class RoomClient extends Emitter<Events> {
         : `${name} paused for a break. Use "Resume" when you're both back.`);
     });
     this.party.on('state', (party) => this.patch({ party }));
-    this.watcher.on('buffer', (b) => this.party.setLocalBuffering(b));
+    this.watcher.on('buffer', (b) => this.party.setLocalBuffering(b.on, b.why ?? null));
     this.watcher.on('player', ({ status, video, titleId }) => {
       this.sync.setPlayer(status, video, titleId);
       this.patch({ player: status, titleId });
@@ -425,10 +426,11 @@ export class RoomClient extends Emitter<Events> {
   followPeer() { this.sync.startFollowing(); }
   stopFollowingPeer() { this.sync.stopFollowing(); }
 
-  /** Jump to whatever the friend is watching (a plain navigation, same as clicking a link). */
+  /** Jump to whatever the friend is watching (a plain navigation, same as clicking a link; works across sites). */
   followPeerTitle() {
     const id = this.peer?.titleId;
-    if (id) location.assign(watchUrl(id));
+    const url = id ? urlForTitle(id) : null;
+    if (url) location.assign(url);
   }
 
   // ---- status -----------------------------------------------------------------------------

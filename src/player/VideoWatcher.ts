@@ -1,5 +1,5 @@
 import { Emitter } from '@/shared/util';
-import { findPlayerVideo, getTitleId, isWatchPage } from './netflix';
+import type { SiteAdapter } from './sites';
 import type { PlayerStatus } from '@/shared/types';
 
 export type VideoEventType = 'play' | 'pause' | 'seeking' | 'seeked' | 'ratechange' | 'ended';
@@ -10,17 +10,20 @@ type Events = {
   player: { status: PlayerStatus; video: HTMLVideoElement | null; titleId: string | null };
   event: { type: VideoEventType; video: HTMLVideoElement };
   /** The player ran out of data (true) / has been comfortably playable again for a moment (false). */
-  buffer: boolean;
+  buffer: { on: boolean; why?: 'ad' };
 };
 
 const BUFFER_AFTER_MS = 800;   // ignore the tiny stalls every seek causes
 const BUFFER_STABLE_MS = 1200; // readyState must stay >= HAVE_FUTURE_DATA this long before we call it recovered
 const BUFFER_GIVE_UP_MS = 45_000; // never deadlock the pair on a stuck player
+const AD_POLL_MS = 250;
+const AD_CLEAR_MS = 600;        // the ad must be gone this long (and the video playable) before we say it's over
+const AD_GIVE_UP_MS = 4 * 60_000; // a stuck class name must never hold the friend forever
 
 const NOT_FOUND_AFTER_MS = 10_000;
 
 /**
- * Finds Netflix's player <video> and re-finds it whenever it's replaced (Netflix is a SPA: next
+ * Finds the site's player <video> (via the SiteAdapter) and re-finds it whenever it's replaced (Netflix and YouTube are SPAs: next
  * episode, back-to-browse and re-entry swap the element without a page load). All listeners and
  * observers are removed in `stop()`.
  */
@@ -38,11 +41,19 @@ export class VideoWatcher extends Emitter<Events> {
   private bufPoll: ReturnType<typeof setInterval> | null = null;
   private bufStart = 0;
   private bufStableSince = 0;
+  private adOn = false;
+  private adStart = 0;
+  private adClearSince = 0;
+  private adTimer: ReturnType<typeof setInterval> | null = null;
+  private lastBuf: { on: boolean; why?: 'ad' } = { on: false };
+
+  constructor(private adapter: SiteAdapter) { super(); }
 
   start() {
     this.mo = new MutationObserver(() => this.scheduleCheck());
     this.mo.observe(document.documentElement, { childList: true, subtree: true });
     this.timer = setInterval(() => this.check(), 1000); // catches pushState navigation + not-found timeout
+    this.adTimer = setInterval(() => this.pollAd(), AD_POLL_MS);
     this.check();
   }
 
@@ -56,11 +67,11 @@ export class VideoWatcher extends Emitter<Events> {
   }
 
   private check() {
-    const titleId = getTitleId();
-    const onWatch = isWatchPage();
+    const titleId = this.adapter.titleId();
+    const onWatch = this.adapter.isWatchPage();
     if (!onWatch) this.watchSince = 0; else if (!this.watchSince) this.watchSince = Date.now();
 
-    const found = findPlayerVideo();
+    const found = this.adapter.findVideo();
     if (found !== this.video) this.attach(found);
 
     const status: PlayerStatus = this.video && onWatch ? 'ready' : onWatch && Date.now() - this.watchSince > NOT_FOUND_AFTER_MS ? 'not-found' : 'none';
@@ -121,7 +132,28 @@ export class VideoWatcher extends Emitter<Events> {
         } else this.bufStableSince = 0;
       }, 250);
     }
-    this.emit('buffer', on);
+    this.publishBuffer();
+  }
+
+  /** Merge "stalled" and "ad playing" into one signal for the party logic (an ad is reported at once, with its reason). */
+  private publishBuffer() {
+    const next: { on: boolean; why?: 'ad' } = { on: this.buffering || this.adOn, ...(this.adOn ? { why: 'ad' as const } : {}) };
+    if (next.on === this.lastBuf.on && next.why === this.lastBuf.why) return;
+    this.lastBuf = next;
+    this.emit('buffer', next);
+  }
+
+  private pollAd() {
+    const now = Date.now();
+    const ad = this.adapter.isWatchPage() && this.adapter.isAdPlaying();
+    if (ad) {
+      this.adClearSince = 0;
+      if (!this.adOn) { this.adOn = true; this.adStart = now; this.publishBuffer(); }
+      else if (now - this.adStart > AD_GIVE_UP_MS) { this.adOn = false; this.publishBuffer(); }
+    } else if (this.adOn) {
+      this.adClearSince ||= now;
+      if (now - this.adClearSince >= AD_CLEAR_MS && (this.video?.readyState ?? 4) >= 3) { this.adOn = false; this.adClearSince = 0; this.publishBuffer(); }
+    }
   }
 
   private detach() {
@@ -144,6 +176,9 @@ export class VideoWatcher extends Emitter<Events> {
     this.mo = null;
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+    if (this.adTimer) clearInterval(this.adTimer);
+    this.adTimer = null;
+    this.adOn = false;
     this.detach();
     this.removeAllListeners();
   }

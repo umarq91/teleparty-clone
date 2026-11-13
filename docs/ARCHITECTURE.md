@@ -1,6 +1,9 @@
 # Architecture
 
-- `src/content/` – content script on netflix.com: `RoomClient` orchestrates signaling, `PeerLink`, `LocalMedia`, `VideoWatcher`, `SyncEngine`; mounts the overlay. One tab hosts the room (Web Lock `navigator.locks`).
+- `src/player/sites.ts` – `SiteAdapter` per supported site (Netflix, YouTube): watch-page detection, title id (`123…` or `yt:<id>`), the player `<video>`, ad detection, URLs. Everything else is site-agnostic. `youtube.ts` finds `#movie_player video.html5-main-video` and detects ads via `#movie_player.ad-showing`.
+- Ads: `VideoWatcher` reports an ad as a `buffer` with `why:'ad'`. The party logic then holds the friend but leaves our own player alone (`SyncEngine.hold({pause:false})`: no broadcasting, no re-pausing), and pauses our content again once the ad ends so it waits at the agreed spot for the countdown.
+- `src/content/lease.ts` – Web Locks are per origin, so a Netflix tab and a YouTube tab could both host. A storage lease (TTL 5 s, heartbeat 1.5 s, visible tab may take it from a hidden one) makes hosting exclusive across sites.
+- `src/content/` – content script on netflix.com and youtube.com: `RoomClient` orchestrates signaling, `PeerLink`, `LocalMedia`, `VideoWatcher`, `SyncEngine`; mounts the overlay. One tab hosts the room (Web Lock `navigator.locks`).
 - `src/signaling/RoomChannel.ts` – private Supabase Realtime channel `room:<id>`: presence + broadcast, backoff resubscribe, validated inbound messages.
 - `src/webrtc/` – `PeerLink` (one RTCPeerConnection, deterministic offerer so no glare, negotiated DataChannel id 0, audio/video transceivers attached with `replaceTrack`), `LocalMedia` (getUserMedia, device changes).
 - `src/player/` – `VideoWatcher` (finds/re-finds `<video>` across SPA navigation), `SyncEngine` (loop guards, coalescing, drift), `drift.ts` (pure), `seek.ts` + `bridge.ts` (opt-in MAIN-world seek).

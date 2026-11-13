@@ -6,8 +6,8 @@ import { App } from './App';
 export interface OverlayHandle { unmount(): void }
 
 /**
- * Mounts the overlay in a closed-off Shadow DOM so Netflix's CSS can't touch it (and ours can't touch
- * Netflix). While Netflix is fullscreen, only descendants of the fullscreen element are visible, so
+ * Mounts the overlay in a closed-off Shadow DOM so the site's CSS can't touch it (and ours can't touch
+ * the site). While the site is fullscreen, only descendants of the fullscreen element are visible, so
  * the host is re-parented into `document.fullscreenElement` when fullscreen toggles.
  */
 export function mountOverlay(client: RoomClient, inviteLink: string, onLeave: () => void): OverlayHandle {
@@ -26,8 +26,15 @@ export function mountOverlay(client: RoomClient, inviteLink: string, onLeave: ()
   };
   place();
   document.addEventListener('fullscreenchange', place);
-  // Netflix may wipe unknown nodes from <body> on navigation; re-attach if that ever happens.
+  // The site may wipe unknown nodes from <body> on navigation; re-attach if that ever happens.
   const keepAlive = setInterval(() => { if (!host.isConnected) place(); }, 1500);
+
+  // Sites bind single-key hotkeys (YouTube: k, f, m, j, l, /; Netflix: space, f, m...) with *capture* listeners that
+  // fire before anything inside our Shadow DOM sees the key. This one is registered first (document_start), so while
+  // you type in our chat box the page never hears the keys. Escape is left alone so our tray can close.
+  const shield = (e: KeyboardEvent) => { if (e.key !== 'Escape' && e.composedPath().includes(host)) e.stopImmediatePropagation(); };
+  const KEY_EVENTS = ['keydown', 'keyup', 'keypress'] as const;
+  KEY_EVENTS.forEach((t) => window.addEventListener(t, shield, true));
 
   const root: Root = createRoot(mountPoint);
   root.render(<App client={client} inviteLink={inviteLink} onLeave={onLeave} />);
@@ -35,6 +42,7 @@ export function mountOverlay(client: RoomClient, inviteLink: string, onLeave: ()
   return {
     unmount() {
       clearInterval(keepAlive);
+      KEY_EVENTS.forEach((t) => window.removeEventListener(t, shield, true));
       document.removeEventListener('fullscreenchange', place);
       root.unmount();
       host.remove();

@@ -107,3 +107,18 @@ describe('chat / sound / party messages', () => {
     expect(validatePeerMessage({ kind: 'party', v: 1, op: 'go', goAt: 5, pos: -1 })).toBeNull();
   });
 });
+
+describe('title ids and ad reasons', () => {
+  it('accepts Netflix and YouTube ids only', () => {
+    expect(validateSync({ ...good, titleId: 'yt:dQw4w9WgXcQ' })).not.toBeNull();
+    expect(validateSync({ ...good, titleId: 'yt:short' })).toBeNull();
+    expect(validateSync({ ...good, titleId: 'yt:dQw4w9WgXcQ/../x' })).toBeNull();
+    expect(validateSync({ ...good, titleId: 'evil:dQw4w9WgXcQ' })).toBeNull();
+    expect(validatePresence({ name: 'Sam', role: 'guest', gen: 'g', playerStatus: 'ready', titleId: 'yt:dQw4w9WgXcQ', inCall: false })).not.toBeNull();
+    expect(validatePresence({ name: 'Sam', role: 'guest', gen: 'g', playerStatus: 'ready', titleId: 'javascript:alert(1)', inCall: false })).toBeNull();
+  });
+  it('buffering may carry why:ad, nothing else', () => {
+    expect(validatePeerMessage({ kind: 'party', v: 1, op: 'buffering', why: 'ad' })).toMatchObject({ why: 'ad' });
+    expect(validatePeerMessage({ kind: 'party', v: 1, op: 'buffering', why: 'because' })).toBeNull();
+  });
+});

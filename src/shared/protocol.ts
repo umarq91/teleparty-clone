@@ -5,6 +5,10 @@
 
 export const PROTOCOL_VERSION = 1;
 
+/** What is playing: a Netflix title id (digits) or a YouTube video (`yt:` + 11 url-safe chars). A strict whitelist: it ends up in a URL. */
+export const TITLE_ID_RE = /^(?:\d{1,20}|yt:[\w-]{11})$/;
+export const isTitleId = (x: unknown): x is string => typeof x === 'string' && x.length <= 32 && TITLE_ID_RE.test(x);
+
 export type SyncType = 'PLAY' | 'PAUSE' | 'SEEK' | 'PERIODIC_SYNC' | 'PLAYER_READY' | 'PLAYER_NOT_FOUND' | 'SYNC_REQUEST' | 'FOLLOW_START' | 'FOLLOW_STOP';
 export const SYNC_TYPES: readonly SyncType[] = ['PLAY', 'PAUSE', 'SEEK', 'PERIODIC_SYNC', 'PLAYER_READY', 'PLAYER_NOT_FOUND', 'SYNC_REQUEST', 'FOLLOW_START', 'FOLLOW_STOP'];
 
@@ -59,7 +63,7 @@ export interface SoundMessage { kind: 'sound'; v: number; id: SoundId }
  */
 export const PARTY_OPS = ['brb', 'ready-ask', 'ready-yes', 'buffering', 'buffered', 'go', 'cancel'] as const;
 export type PartyOp = (typeof PARTY_OPS)[number];
-export interface PartyMessage { kind: 'party'; v: number; op: PartyOp; goAt?: number; pos?: number; secs?: number }
+export interface PartyMessage { kind: 'party'; v: number; op: PartyOp; goAt?: number; pos?: number; secs?: number; /** buffering only: the stall is an advert, not a slow connection. */ why?: 'ad' }
 
 export type PeerMessage = SyncMessage | PingMessage | PongMessage | MediaStateMessage | FixMediaMessage | ReactMessage | ChatMessage | SoundMessage | PartyMessage;
 
@@ -102,7 +106,7 @@ export function validateSync(x: unknown): SyncMessage | null {
   if (!isObj(x) || x.kind !== 'sync' || x.v !== PROTOCOL_VERSION) return null;
   if (!isStr(x.type, 32) || !(SYNC_TYPES as readonly string[]).includes(x.type)) return null;
   if (!isNum(x.seq, 0, Number.MAX_SAFE_INTEGER) || !isNum(x.sentAt, 0, Number.MAX_SAFE_INTEGER)) return null;
-  const titleId = x.titleId === null ? null : isStr(x.titleId, 32) && /^\d{1,20}$/.test(x.titleId) ? x.titleId : undefined;
+  const titleId = x.titleId === null ? null : isTitleId(x.titleId) ? x.titleId : undefined;
   if (titleId === undefined) return null;
   const type = x.type as SyncType;
   let state: PlaybackState | null = null;
@@ -147,6 +151,7 @@ export function validatePeerMessage(x: unknown): PeerMessage | null {
       if (x.goAt !== undefined) { if (!isNum(x.goAt, 0, Number.MAX_SAFE_INTEGER)) return null; out.goAt = x.goAt; }
       if (x.pos !== undefined) { if (!isNum(x.pos, 0, MAX_POSITION_SEC)) return null; out.pos = x.pos; }
       if (x.secs !== undefined) { if (!isNum(x.secs, 0, 10)) return null; out.secs = x.secs; }
+      if (x.why !== undefined) { if (x.why !== 'ad') return null; out.why = 'ad'; }
       if (op === 'go' && out.goAt === undefined) return null;
       return out;
     }
@@ -219,7 +224,7 @@ export function validatePresence(x: unknown): PresencePayload | null {
   if (role !== 'host' && role !== 'guest') return null;
   if (!isStr(gen, 64)) return null;
   if (playerStatus !== 'none' && playerStatus !== 'not-found' && playerStatus !== 'ready') return null;
-  if (titleId !== null && !(isStr(titleId, 32) && /^\d{1,20}$/.test(titleId))) return null;
+  if (titleId !== null && !isTitleId(titleId)) return null;
   if (typeof inCall !== 'boolean') return null;
   return { name, role, gen, playerStatus, titleId: titleId as string | null, inCall };
 }

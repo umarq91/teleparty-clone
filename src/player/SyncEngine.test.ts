@@ -233,4 +233,21 @@ describe('SyncEngine', () => {
       expect(b.video.paused).toBe(false);
     });
   });
+
+  describe('passive hold (ad playing)', () => {
+    it('does not touch the player, never broadcasts, and ignores remote commands until released', async () => {
+      const { a, b } = makePair();
+      a.video.play(); await settle();
+      const before = userMsgs(b).length;
+      b.engine.hold({ pause: false });
+      b.video.pause(); b.video.play(); b.video.jump(500); await settle(); // the "ad" doing its thing
+      expect(b.video.paused).toBe(false);                 // our engine did not pause or re-pause it
+      expect(userMsgs(b)).toHaveLength(before);           // nothing broadcast
+      a.video.pause(); await settle();
+      expect(b.video.paused).toBe(false);                 // remote commands ignored while held
+      await b.engine.release({ play: false });
+      a.video.play(); await settle();
+      expect(b.video.paused).toBe(false);
+    });
+  });
 });
