@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { useEffect, useRef, useState } from 'react';
-import { Coffee, Film, MessageCircle, PartyPopper, Search, Send, Smile, Sparkles, SquareCheckBig, Sticker, Volume2, VolumeX, X } from 'lucide-react';
+import { ArrowLeft, Coffee, Minus, Search, Send, Sparkles, SquareCheckBig, Volume2, VolumeX } from 'lucide-react';
 import type { SoundId } from '@/shared/protocol';
 import { sendRuntime, type StickerResult, type StickerSearchResponse } from '@/shared/messaging';
 import type { PartyState } from '@/shared/types';
@@ -8,22 +8,22 @@ import { SPRING } from '@/shared/ui/kit';
 import { searchEmojis } from './emojis';
 import type { ChatItem } from './hooks';
 import { SOUNDS } from './sounds';
+import { MessageCircle } from 'lucide-react';
 
-export type TrayTab = 'chat' | 'emoji' | 'stickers' | 'gifs' | 'sounds' | 'party';
+/** The four "do together" screens that open inside the panel. */
+export type ToolKind = 'chat' | 'fun' | 'sounds' | 'pause';
+export type FunTab = 'emoji' | 'stickers' | 'gifs';
 
-const TABS: { id: TrayTab; label: string; icon: typeof Smile }[] = [
-  { id: 'chat', label: 'Chat', icon: MessageCircle },
-  { id: 'emoji', label: 'Emoji', icon: Smile },
-  { id: 'stickers', label: 'Stickers', icon: Sticker },
-  { id: 'gifs', label: 'GIFs', icon: Film },
-  { id: 'sounds', label: 'Sounds', icon: Volume2 },
-  { id: 'party', label: 'Party', icon: PartyPopper },
-];
+export const TOOL_TITLES: Record<ToolKind, string> = { chat: 'Chat', fun: 'Emoji, stickers & GIFs', sounds: 'Sounds', pause: 'Pause together' };
 
-interface TrayProps {
-  tab: TrayTab;
-  onTab: (t: TrayTab) => void;
-  onClose: () => void;
+export interface ScreenProps {
+  kind: ToolKind;
+  funTab: FunTab;
+  onFunTab: (t: FunTab) => void;
+  onBack: () => void;
+  onMinimize: () => void;
+  /** Header doubles as the drag handle for the panel. */
+  onDragStart: (e: React.PointerEvent<HTMLElement>) => void;
   /** Can we reach the friend right now? Sending anything needs the peer connection. */
   connected: boolean;
   peerName: string;
@@ -39,66 +39,72 @@ interface TrayProps {
   onBrb: () => void;
 }
 
-/** One home for everything you can throw at your friend: words, stickers, GIFs, sounds, and "let's pause". */
-export function Tray(p: TrayProps) {
+const FUN_TABS: { id: FunTab; label: string }[] = [{ id: 'emoji', label: 'Emoji' }, { id: 'stickers', label: 'Stickers' }, { id: 'gifs', label: 'GIFs' }];
+
+/**
+ * One screen inside the panel (replacing the home view), with a Back button. Chat, emoji/stickers/GIFs,
+ * sounds and the pause tools each get the whole panel body, so nothing opens off-screen.
+ */
+export function ToolScreen(p: ScreenProps) {
   const [q, setQ] = useState('');
-  const searchable = p.tab === 'emoji' || p.tab === 'stickers' || p.tab === 'gifs';
-  useEffect(() => setQ(''), [p.tab]);
+  useEffect(() => setQ(''), [p.kind, p.funTab]);
+  const searchable = p.kind === 'fun';
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8, scale: 0.96 }} transition={SPRING}
-      role="dialog" aria-label="Chat, stickers, sounds and party tools"
-      onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); p.onClose(); } }}
-      className="surface-float w-[336px] rounded-2xl p-3"
+      initial={{ opacity: 0, x: 18 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 18 }} transition={{ duration: 0.16 }}
+      role="region" aria-label={TOOL_TITLES[p.kind]}
+      onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); p.onBack(); } }}
     >
-      <div className="mb-2 flex items-center gap-1">
-        <div role="tablist" aria-label="Sections" className="flex min-w-0 flex-1 gap-0.5 rounded-xl bg-[#0b0f1d] p-1">
-          {TABS.map((t) => {
-            const active = p.tab === t.id;
-            return (
-              <motion.button
-                key={t.id} layout role="tab" type="button" aria-selected={active} aria-label={t.label} title={t.label}
-                onMouseDown={(e) => e.preventDefault()} onClick={() => p.onTab(t.id)} transition={SPRING}
-                className={`focus-candy relative flex h-8 items-center justify-center gap-1 rounded-xl text-[12px] font-bold ${active ? 'flex-[2.3] text-grape-950' : 'flex-1 text-soft hover:text-white'}`}
-              >
-                {active && <motion.span layoutId="tray-tab" transition={SPRING} className="absolute inset-0 rounded-lg bg-lemon" />}
-                <t.icon size={15} className="relative shrink-0" />
-                {active && <span className="relative">{t.label}</span>}
-              </motion.button>
-            );
-          })}
-        </div>
-        <button type="button" aria-label="Close" onMouseDown={(e) => e.preventDefault()} onClick={p.onClose} className="focus-candy flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-soft hover:bg-white/10 hover:text-white"><X size={16} /></button>
+      <div className="flex cursor-grab items-center gap-2 px-3.5 pb-2 pt-3 active:cursor-grabbing" onPointerDown={p.onDragStart}>
+        <button
+          type="button" onMouseDown={(e) => e.preventDefault()} onClick={p.onBack}
+          className="focus-candy surface-raised flex h-10 items-center gap-1.5 rounded-xl pl-2.5 pr-3.5 text-[14px] font-bold text-white hover:bg-[#2c3760]"
+        ><ArrowLeft size={17} /> Back</button>
+        <h2 className="min-w-0 flex-1 truncate text-[15px] font-bold text-white">{TOOL_TITLES[p.kind]}</h2>
+        <button type="button" title="Minimize" aria-label="Minimize" onMouseDown={(e) => e.preventDefault()} onClick={p.onMinimize}
+          className="focus-candy surface-raised flex h-10 w-10 items-center justify-center rounded-xl text-white hover:bg-[#2c3760]"><Minus size={16} /></button>
       </div>
 
-      {searchable && (
-        <div className="relative mb-2">
-          <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-mute" />
-          <input
-            value={q} onChange={(e) => setQ(e.target.value)} autoFocus aria-label="Search"
-            placeholder={p.tab === 'emoji' ? 'Search emoji… (try “cry”)' : p.tab === 'stickers' ? 'Search stickers on the internet…' : 'Search GIFs on the internet…'}
-            className="h-9 w-full rounded-xl border border-[#46527f] bg-[#0b0f1d] pl-8 pr-2 text-[14px] text-white outline-none placeholder:text-mute focus:border-lemon"
-          />
-        </div>
-      )}
+      <div className="space-y-2.5 px-3.5 pb-3.5">
+        {p.kind === 'fun' && (
+          <div role="tablist" aria-label="Reaction type" className="grid grid-cols-3 gap-1 rounded-xl bg-[#0b0f1d] p-1">
+            {FUN_TABS.map((t) => (
+              <button
+                key={t.id} role="tab" type="button" aria-selected={p.funTab === t.id} onMouseDown={(e) => e.preventDefault()} onClick={() => p.onFunTab(t.id)}
+                className={`focus-candy h-9 rounded-lg text-[14px] font-bold transition-colors ${p.funTab === t.id ? 'bg-lemon text-grape-950' : 'text-soft hover:bg-white/10 hover:text-white'}`}
+              >{t.label}</button>
+            ))}
+          </div>
+        )}
+        {searchable && (
+          <div className="relative">
+            <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-mute" />
+            <input
+              value={q} onChange={(e) => setQ(e.target.value)} autoFocus aria-label="Search"
+              placeholder={p.funTab === 'emoji' ? 'Search emoji (try “cry”)' : p.funTab === 'stickers' ? 'Search stickers on the internet' : 'Search GIFs on the internet'}
+              className="h-11 w-full rounded-xl border border-[#46527f] bg-[#0b0f1d] pl-9 pr-3 text-[14px] text-white outline-none placeholder:text-mute focus:border-lemon"
+            />
+          </div>
+        )}
 
-      <div className="h-[210px]">
-        {p.tab === 'chat' && <ChatTab {...p} />}
-        {p.tab === 'emoji' && <EmojiGrid q={q} disabled={!p.connected} onPick={(e, label) => p.onReaction({ emoji: e, label })} />}
-        {(p.tab === 'stickers' || p.tab === 'gifs') && <WebResults kind={p.tab} q={q} hasKey={p.hasGiphyKey} disabled={!p.connected} onPick={(r) => p.onReaction({ gif: r.url, label: r.title })} />}
-        {p.tab === 'sounds' && <SoundsTab {...p} />}
-        {p.tab === 'party' && <PartyTab {...p} />}
+        <div className={p.kind === 'pause' ? '' : 'h-[300px]'}>
+          {p.kind === 'chat' && <ChatTab {...p} />}
+          {p.kind === 'fun' && p.funTab === 'emoji' && <EmojiGrid q={q} disabled={!p.connected} onPick={(e, label) => p.onReaction({ emoji: e, label })} />}
+          {p.kind === 'fun' && p.funTab !== 'emoji' && <WebResults kind={p.funTab} q={q} hasKey={p.hasGiphyKey} disabled={!p.connected} onPick={(r) => p.onReaction({ gif: r.url, label: r.title })} />}
+          {p.kind === 'sounds' && <SoundsTab {...p} />}
+          {p.kind === 'pause' && <PartyTab {...p} />}
+        </div>
+        {!p.connected && <p className="text-center text-[13px] text-soft">Connect with {p.peerName} first. Sending needs your friend to be online.</p>}
+        {p.kind === 'fun' && p.funTab !== 'emoji' && <div className="text-right text-[12px] text-mute">Powered by GIPHY</div>}
       </div>
-      {!p.connected && <p className="mt-1.5 text-center text-[12px] text-mute">Connect with {p.peerName} to send things.</p>}
-      {(p.tab === 'stickers' || p.tab === 'gifs') && <div className="mt-1 text-right text-[12px] text-mute">Powered by GIPHY</div>}
     </motion.div>
   );
 }
 
 /* ---------- Chat ---------- */
 
-function ChatTab({ chat, connected, peerName, onChat }: TrayProps) {
+function ChatTab({ chat, connected, peerName, onChat }: ScreenProps) {
   const [text, setText] = useState('');
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => { end.current?.scrollIntoView({ block: 'end' }); }, [chat.length]);
@@ -187,7 +193,7 @@ function WebResults({ kind, q, hasKey, disabled, onPick }: { kind: 'stickers' | 
 
 /* ---------- Sounds ---------- */
 
-function SoundsTab({ connected, muted, onMuted, onSound }: TrayProps) {
+function SoundsTab({ connected, muted, onMuted, onSound }: ScreenProps) {
   return (
     <div className="flex h-full flex-col">
       <div className="grid flex-1 grid-cols-4 content-start gap-1.5">
@@ -212,11 +218,11 @@ function SoundsTab({ connected, muted, onMuted, onSound }: TrayProps) {
 
 /* ---------- Party tools ---------- */
 
-function PartyTab({ connected, party, onReady, onBrb, onClose, peerName }: TrayProps) {
+function PartyTab({ connected, party, onReady, onBrb, onBack, peerName }: ScreenProps) {
   const busy = party.hold !== 'none' || party.countdownTo !== null;
   const card = (title: string, text: string, icon: React.ReactNode, tone: string, action: () => void) => (
     <motion.button
-      type="button" disabled={!connected || busy} onMouseDown={(e) => e.preventDefault()} onClick={() => { action(); onClose(); }}
+      type="button" disabled={!connected || busy} onMouseDown={(e) => e.preventDefault()} onClick={() => { action(); onBack(); }}
       whileHover={{ y: -2 }} whileTap={{ scale: 0.97 }} transition={SPRING}
       className="focus-candy surface-raised flex w-full items-center gap-3 rounded-2xl p-3 text-left disabled:opacity-40"
     >
@@ -225,10 +231,10 @@ function PartyTab({ connected, party, onReady, onBrb, onClose, peerName }: TrayP
     </motion.button>
   );
   return (
-    <div className="flex h-full flex-col gap-2">
+    <div className="flex flex-col gap-2">
       {card('Ready check', `Pauses both. When ${peerName} says ready, a 3-2-1 starts the movie.`, <SquareCheckBig size={20} />, 'bg-mint', onReady)}
       {card('Brb', 'Pauses both while you grab snacks. Tap “I’m back” for a 3-2-1.', <Coffee size={20} />, 'bg-tang', onBrb)}
-      <p className="mt-auto text-[12px] leading-4 text-mute">{busy ? 'Something is already holding the movie. Finish that first.' : 'Videos that buffer pause for both of you automatically.'}</p>
+      <p className="mt-1 text-[13px] leading-[18px] text-mute">{busy ? 'Something is already holding the movie. Finish that first.' : 'Videos that buffer pause for both of you automatically.'}</p>
     </div>
   );
 }

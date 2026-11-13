@@ -4,7 +4,7 @@ import { useState } from 'react';
 import '../src/floating-ui/styles.css';
 import { App } from '../src/floating-ui/App';
 import { ChatLayer, PartyLayer } from '../src/floating-ui/Party';
-import { Tray, type TrayTab } from '../src/floating-ui/Tray';
+import { ToolScreen, type FunTab, type ToolKind } from '../src/floating-ui/ToolScreen';
 import { initialParty, initialStatus, type PartyState, type RoomStatus } from '../src/shared/types';
 
 const q = new URLSearchParams(location.search);
@@ -53,15 +53,17 @@ function fakeClient(partyKey: string) {
 }
 
 function Preview() {
-  const [tab, setTab] = useState<TrayTab>((q.get('tab') as TrayTab) ?? 'chat');
+  const [funTab, setFunTab] = useState<FunTab>((q.get('fun') as FunTab) ?? 'emoji');
   if (view === 'party') {
     return <Backdrop><PartyLayer party={PARTIES[q.get('s') ?? 'brb']!} control={fakeControl} peerName="Sam" notice={q.get('notice')} onDismissNotice={noop} /></Backdrop>;
   }
   if (view === 'chat') return <Backdrop><ChatLayer items={ITEMS} /></Backdrop>;
-  if (view === 'tray') {
+  if (view === 'screen') {
     return (
-      <Backdrop><div className="mtp-root" style={{ position: 'absolute', left: 40, top: 40 }}>
-        <Tray tab={tab} onTab={setTab} onClose={noop} connected={q.get('off') !== '1'} peerName="Sam" hasGiphyKey={false} chat={ITEMS} party={PARTIES[q.get('s') ?? 'none']!} muted={false} onMuted={noop} onReaction={noop} onChat={() => true} onSound={noop} onReady={noop} onBrb={noop} />
+      <Backdrop><div className="mtp-root" style={{ position: 'absolute', left: 40, top: 20, width: 344 }}>
+        <div className="surface-float rounded-2xl">
+          <ToolScreen kind={(q.get('kind') as ToolKind) ?? 'chat'} funTab={funTab} onFunTab={setFunTab} onBack={noop} onMinimize={noop} onDragStart={noop} connected={q.get('off') !== '1'} peerName="Sam" hasGiphyKey={false} chat={ITEMS} party={PARTIES[q.get('s') ?? 'none']!} muted={false} onMuted={noop} onReaction={noop} onChat={() => true} onSound={noop} onReady={noop} onBrb={noop} />
+        </div>
       </div></Backdrop>
     );
   }
